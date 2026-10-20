@@ -40,6 +40,12 @@ export const settingsSchema = z.object({
   inviteCodeRegistration: z.boolean(),
   /** 体験専用の枠を一般に公開する（TR-02） */
   trialPublicSlots: z.boolean(),
+  /**
+   * ネットで使える支払い方法（PY-04）。カードは必ず使える。コンビニ払い・PayPay は
+   * Stripe の審査が通って有効にしてから ON にする（docs/stripe-prelaunch.md）。現金は教室で受け取る
+   */
+  konbiniEnabled: z.boolean(),
+  paypayEnabled: z.boolean(),
   /** 通知の種類ごとの送る/送らない（NT-02） */
   notifications: z.record(z.enum(NOTIFICATION_TYPES), z.boolean()),
   /** ログイン状態を保つ日数（AU-04） */
@@ -76,6 +82,8 @@ export const DEFAULT_SETTINGS: Settings = {
   selfRegistration: false,
   inviteCodeRegistration: false,
   trialPublicSlots: false,
+  konbiniEnabled: false,
+  paypayEnabled: false,
   notifications: Object.fromEntries(NOTIFICATION_TYPES.map((t) => [t, true])) as Settings['notifications'],
   sessionDays: 60,
   maxFailedLogins: 5,
@@ -118,4 +126,9 @@ export async function getSetting<K extends SettingKey>(db: Db, key: K): Promise<
   const [row] = await db.select().from(settingsTable).where(eq(settingsTable.key, key));
   if (!row) return DEFAULT_SETTINGS[key];
   return settingsSchema.shape[key].parse(row.value) as Settings[K];
+}
+
+/** いま選べる支払い方法（設定で止めているものは除く）。現金は教室で受け取るので、ネットの支払いには使わない */
+export function enabledBillingMethods(settings: Settings): ('card' | 'konbini' | 'paypay' | 'cash')[] {
+  return ['card', ...(settings.konbiniEnabled ? (['konbini'] as const) : []), ...(settings.paypayEnabled ? (['paypay'] as const) : []), 'cash'];
 }

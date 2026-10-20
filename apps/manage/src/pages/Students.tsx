@@ -21,7 +21,7 @@ import {
   useLoad,
   useToast,
 } from '@hanamaru/ui';
-import { api, type Course, type StudentRow, type Teacher } from '../api.js';
+import { api, useBillingOptions, type Course, type StudentRow, type Teacher } from '../api.js';
 
 // 生徒の一覧・登録（ST-01、ST-02、DB-01 の移動先）
 
@@ -129,6 +129,7 @@ function NewStudent({ onDone }: { onDone: () => void }) {
   const refs = useLoad(() => Promise.all([api.get<Teacher[]>('/teachers'), api.get<Course[]>('/courses')]), []);
   const [form, setForm] = useState({ accountEmail: '', guardianName: '', name: '', phone: '', email: '', address: '', status: 'enrolling', courseId: '', billingMethod: 'card' });
   const [teacherIds, setTeacherIds] = useState<string[]>([]);
+  const billingOptions = useBillingOptions();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -173,10 +174,11 @@ function NewStudent({ onDone }: { onDone: () => void }) {
           <option value="active">在籍中</option>
         </Select>
         <Select label="支払い方法" value={form.billingMethod} onChange={set('billingMethod')}>
-          <option value="card">カード（自動課金）</option>
-          <option value="konbini">コンビニ</option>
-          <option value="paypay">PayPay</option>
-          <option value="cash">現金</option>
+          {billingOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
         </Select>
       </div>
       <Loadable state={refs.state} reload={refs.reload} skeleton={<Skeleton lines={3} />}>

@@ -24,7 +24,7 @@ import { SYSTEM, type Actor, type Ctx } from './context.js';
 import { addLedger } from './credits.js';
 import { conflict, invalid, notFound, ruleViolation } from './errors.js';
 import type { InvoiceStatus, OnlineMethod, PaymentEvent } from './payment-gateway.js';
-import { getSettings } from './settings.js';
+import { enabledBillingMethods, getSettings } from './settings.js';
 import type { Message, Recipient } from './notify.js';
 import type { NotificationType } from './settings.js';
 
@@ -275,11 +275,14 @@ export async function enrollmentOptions(ctx: Ctx, actor: Actor, studentId: strin
       total: p.admissionFee + p.lessonsPrice,
     })),
     course: course ? { name: course.name, lessonsPerMonth: course.lessonsPerMonth, amount: price?.amount ?? null } : null,
-    methods: [
-      { method: 'card', label: 'クレジットカード・Apple Pay・Google Pay（毎月1日に自動でお支払い）', recommended: true },
-      { method: 'konbini', label: 'コンビニ払い（毎月1日にお支払い用のリンクをお送りします）', recommended: false },
-      { method: 'paypay', label: 'PayPay（毎月1日にお支払い用のリンクをお送りします）', recommended: false },
-    ] as const,
+    // 設定で止めている支払い方法は出さない（PY-04）
+    methods: (
+      [
+        { method: 'card', label: 'クレジットカード・Apple Pay・Google Pay（毎月1日に自動でお支払い）', recommended: true },
+        { method: 'konbini', label: 'コンビニ払い（毎月1日にお支払い用のリンクをお送りします）', recommended: false },
+        { method: 'paypay', label: 'PayPay（毎月1日にお支払い用のリンクをお送りします）', recommended: false },
+      ] as const
+    ).filter((m) => enabledBillingMethods(settings).includes(m.method)),
   };
 }
 
@@ -297,6 +300,7 @@ export async function startEnrollment(
   if (s.status !== 'enrolling') throw ruleViolation('入会手続きはすでに済んでいます');
   // 契約の内容（期間・自動課金・退会と休会・キャンセル）と利用規約への同意を、お支払いの前に取る
   if (input.agreed !== true) throw invalid('契約の内容と利用規約への同意が必要です');
+  if (!enabledBillingMethods(await getSettings(ctx.db)).includes(input.method)) throw invalid('この支払い方法は、いまは使えません');
   if (!s.approved) throw ruleViolation('教室の承認後に入会手続きができます');
   if (!s.courseId) throw ruleViolation('月額コースが設定されていません。教室にお問い合わせください');
   const [pkg] = await ctx.db.select().from(enrollmentPackages).where(eq(enrollmentPackages.id, input.packageId));

@@ -90,6 +90,7 @@ export function Enroll() {
                     </span>
                   </label>
                 ))}
+                <p className="small secondary">現金でのお支払いをご希望の場合は、教室にご相談ください。</p>
               </fieldset>
               <section className="stack-sm" aria-labelledby="terms-title">
                 <h2 className="field-label" id="terms-title">

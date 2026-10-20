@@ -23,6 +23,14 @@ import { parseCsv } from '../lib/csv.js';
 import { applyBillingChange, needsCard, resumeBilling, stopBilling, undoStopBilling } from './billing.js';
 import { cancelForCause, sendNotices } from './booking.js';
 import { DomainError } from './errors.js';
+import { enabledBillingMethods, getSettings } from './settings.js';
+
+/** 設定で止めている支払い方法にはできない（PY-04: いまはカードと現金だけ） */
+async function assertBillingMethodEnabled(db: Db, method: string): Promise<void> {
+  if (!enabledBillingMethods(await getSettings(db)).includes(method as never)) {
+    throw invalid('この支払い方法は、いまは使えません。設定で有効にしてから選んでください', [{ path: ['billingMethod'], message: 'この支払い方法は、いまは使えません' }]);
+  }
+}
 
 // 生徒・講師の登録と管理（3.2、3.3、3.9）
 
@@ -107,6 +115,7 @@ async function insertStudent(tx: Db, actor: Actor, input: ParsedStudent) {
 export async function createStudent(ctx: Ctx, actor: Actor, raw: unknown) {
   assertAdmin(actor);
   const input = parse(studentInput, raw);
+  await assertBillingMethodEnabled(ctx.db, input.billingMethod);
   const result = await ctx.db.transaction((tx) => insertStudent(tx, actor, input));
   if (result.created || !result.account.passwordHash) await issueInvite(ctx, result.account);
   return result.student;
@@ -184,6 +193,7 @@ export async function updateStudent(ctx: Ctx, actor: Actor, studentId: string, r
   assertAdmin(actor);
   const patch = parse(studentPatch, raw);
   const before = await loadStudent(ctx.db, studentId);
+  if (patch.billingMethod && patch.billingMethod !== before.billingMethod) await assertBillingMethodEnabled(ctx.db, patch.billingMethod);
   const updated = await ctx.db.transaction(async (tx) => {
     const [s] = await tx.update(students).set(patch).where(eq(students.id, studentId)).returning();
     await audit(tx, actor, 'student.update', 'student', studentId, patch);

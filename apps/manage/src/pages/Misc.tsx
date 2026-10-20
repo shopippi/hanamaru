@@ -264,6 +264,8 @@ type Settings = {
   selfRegistration: boolean;
   inviteCodeRegistration: boolean;
   trialPublicSlots: boolean;
+  konbiniEnabled: boolean;
+  paypayEnabled: boolean;
   notifications: Record<string, boolean>;
   sessionDays: number;
   maxFailedLogins: number;
@@ -341,6 +343,13 @@ export function SettingsPage() {
                 <Checkbox label="自己登録を受け付ける（管理者の承認が必要）" checked={s.selfRegistration} onChange={(e) => set('selfRegistration', e.target.checked)} />
                 <Checkbox label="招待コードでの登録を受け付ける" checked={s.inviteCodeRegistration} onChange={(e) => set('inviteCodeRegistration', e.target.checked)} />
                 <Checkbox label="体験専用の枠を一般に公開する" checked={s.trialPublicSlots} onChange={(e) => set('trialPublicSlots', e.target.checked)} />
+                </div>
+              </Panel>
+              <Panel title="支払い方法">
+                <div className="stack-sm">
+                  <p className="small secondary">カード（Apple Pay・Google Pay を含む）と現金は、いつでも使えます。コンビニ払い・PayPay は、Stripe の審査が通って有効にしてから ON にしてください。</p>
+                  <Checkbox label="コンビニ払いを使う" checked={s.konbiniEnabled} onChange={(e) => set('konbiniEnabled', e.target.checked)} />
+                  <Checkbox label="PayPay を使う" checked={s.paypayEnabled} onChange={(e) => set('paypayEnabled', e.target.checked)} />
                 </div>
               </Panel>
               <Panel title="通知（メール）">
