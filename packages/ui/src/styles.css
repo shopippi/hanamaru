@@ -1724,6 +1724,7 @@ details[open] > summary::after {
   padding: var(--s10) var(--s4) var(--s8);
 }
 .auth-brand {
+  text-decoration: none;
   display: flex;
   align-items: center;
   gap: var(--s2);

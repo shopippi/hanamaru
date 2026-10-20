@@ -14,6 +14,17 @@ import { billingMonthOf } from '../lib/time.js';
 const unix = (d: Date) => Math.floor(d.getTime() / 1000);
 const idOf = (x: string | { id: string } | null | undefined) => (typeof x === 'string' ? x : (x?.id ?? null));
 
+/** こちらで扱う Stripe の通知の種類。Webhook の送信先にはこれだけを登録する（scripts/stripe-setup.ts） */
+export const WEBHOOK_EVENTS = [
+  'checkout.session.completed',
+  'checkout.session.async_payment_succeeded',
+  'checkout.session.async_payment_failed',
+  'checkout.session.expired',
+  'customer.subscription.deleted',
+  'invoice.paid',
+  'invoice.payment_failed',
+] as const satisfies readonly Stripe.WebhookEndpointCreateParams.EnabledEvent[];
+
 export class StripeGateway implements PaymentGateway {
   private readonly stripe: Stripe;
 
@@ -22,8 +33,10 @@ export class StripeGateway implements PaymentGateway {
     private readonly webhookSecret: string,
     /** 解約の操作を出さないカスタマーポータルの設定（scripts/stripe-setup.ts で作る） */
     private readonly portalConfigurationId: string | undefined,
+    /** 接続先の差し替え（検証用の stripe-mock など）。本番では指定しない */
+    connection?: Pick<Stripe.StripeConfig, 'host' | 'port' | 'protocol'>,
   ) {
-    this.stripe = new Stripe(secretKey);
+    this.stripe = new Stripe(secretKey, { ...connection });
   }
 
   async createCustomer(input: { name: string; email: string | null; studentId: string }): Promise<string> {
