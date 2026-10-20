@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { fieldErrors } from './api.js';
-import { Button, ConfirmDialog, Loadable, Panel, Skeleton, TextArea, TextField, Warning, useToast } from './components.js';
+import { Button, ConfirmDialog, Loadable, Notice, Panel, Skeleton, TextArea, TextField, Warning, useToast } from './components.js';
 import { useAction, useLoad } from './hooks.js';
 import { IconUpload } from './icons.js';
 
@@ -13,6 +13,10 @@ export interface TeacherProfileData {
   career: string;
   message: string;
   photo: string | null;
+  /** 写真の大きさ（バイト）と、おすすめの大きさを超えているか（TC-06） */
+  photoSize?: number | null;
+  photoLarge?: boolean;
+  photoRecommendedKB?: number;
 }
 
 export interface PhotoUpload {
@@ -20,34 +24,74 @@ export interface PhotoUpload {
   dataBase64: string;
 }
 
-/** 写真の一辺（px）。生徒の画面では丸く小さく出すので、これで足りる */
-const PHOTO_SIZE = 480;
+/** 写真の一辺（px）。生徒の画面では丸く出す。高解像度の画面でもきれいに見える大きさ */
+const PHOTO_SIZE = 1080;
+const PHOTO_QUALITY = 0.9;
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('写真を読み込めませんでした。別の写真を選んでください'));
+    el.src = src;
+  });
+}
+
+/** 画像の真ん中を正方形に切り抜き、一辺 side 以下に縮めて JPEG にする */
+function encodeSquare(img: HTMLImageElement, side: number, quality: number): { upload: PhotoUpload; previewUrl: string; bytes: number } {
+  const crop = Math.min(img.naturalWidth, img.naturalHeight);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = Math.min(side, crop);
+  const g = canvas.getContext('2d');
+  if (!g) throw new Error('写真を読み込めませんでした');
+  g.drawImage(img, (img.naturalWidth - crop) / 2, (img.naturalHeight - crop) / 2, crop, crop, 0, 0, canvas.width, canvas.height);
+  const dataUrl = canvas.toDataURL('image/jpeg', quality);
+  const dataBase64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  // base64 の4文字が3バイト
+  const bytes = Math.floor((dataBase64.length * 3) / 4) - (dataBase64.endsWith('==') ? 2 : dataBase64.endsWith('=') ? 1 : 0);
+  return { upload: { contentType: 'image/jpeg', dataBase64 }, previewUrl: dataUrl, bytes };
+}
 
 /**
- * 選んだ写真を、真ん中で正方形に切り抜いて縮め、JPEG にする。
- * スマホで撮った大きな写真でも、送る大きさは 100KB 前後になる
+ * 選んだ写真を、真ん中で正方形に切り抜いて一辺 1080px までに縮め、JPEG にする。
+ * おすすめの大きさを超えても、そのまま保存できる（あとで「画質を下げる」で小さくできる）
  */
 export async function squarePhoto(file: File): Promise<{ upload: PhotoUpload; previewUrl: string }> {
   const url = URL.createObjectURL(file);
   try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = () => reject(new Error('写真を読み込めませんでした。別の写真を選んでください'));
-      el.src = url;
-    });
-    const side = Math.min(img.naturalWidth, img.naturalHeight);
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = Math.min(PHOTO_SIZE, side);
-    const g = canvas.getContext('2d');
-    if (!g) throw new Error('写真を読み込めませんでした');
-    g.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-    return { upload: { contentType: 'image/jpeg', dataBase64: dataUrl.slice(dataUrl.indexOf(',') + 1) }, previewUrl: dataUrl };
+    const { upload, previewUrl } = encodeSquare(await loadImage(url), PHOTO_SIZE, PHOTO_QUALITY);
+    return { upload, previewUrl };
   } finally {
     URL.revokeObjectURL(url);
   }
 }
+
+/**
+ * 保存済みの写真を、おすすめの大きさ（targetKB）に収まるまで画質を下げて作り直す。
+ * 画質を段階的に下げ、それでも収まらなければ一辺も小さくする
+ */
+export async function shrinkPhoto(src: string, targetKB: number): Promise<{ upload: PhotoUpload; previewUrl: string; bytes: number }> {
+  const res = await fetch(src, { credentials: 'same-origin' });
+  if (!res.ok) throw new Error('写真を読み込めませんでした。時間をおいてもう一度お試しください');
+  const url = URL.createObjectURL(await res.blob());
+  try {
+    const img = await loadImage(url);
+    let side = Math.min(PHOTO_SIZE, img.naturalWidth, img.naturalHeight);
+    let last = encodeSquare(img, side, 0.8);
+    for (let round = 0; round < 6; round++) {
+      for (const q of [0.8, 0.7, 0.6, 0.5]) {
+        last = encodeSquare(img, side, q);
+        if (last.bytes <= targetKB * 1024) return last;
+      }
+      side = Math.round(side * 0.8);
+    }
+    return last;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+const kb = (bytes: number) => `${Math.round(bytes / 1024).toLocaleString('ja-JP')}KB`;
 
 const splitInstruments = (s: string) =>
   s
@@ -103,8 +147,19 @@ function ProfileForm({
   const [message, setMessage] = useState(initial.message);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [photo, setPhoto] = useState<string | null>(initial.photo);
+  const [photoSize, setPhotoSize] = useState<number | null>(initial.photoSize ?? null);
+  const [photoLarge, setPhotoLarge] = useState(!!initial.photoLarge);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  useEffect(() => setPhoto(initial.photo), [initial.photo]);
+  useEffect(() => {
+    setPhoto(initial.photo);
+    setPhotoSize(initial.photoSize ?? null);
+    setPhotoLarge(!!initial.photoLarge);
+  }, [initial.photo, initial.photoSize, initial.photoLarge]);
+  const showSaved = (saved: TeacherProfileData) => {
+    setPhoto(saved.photo);
+    setPhotoSize(saved.photoSize ?? null);
+    setPhotoLarge(!!saved.photoLarge);
+  };
   const dirty = instruments !== initial.instruments.join('、') || career !== initial.career || message !== initial.message;
 
   const saveText = useAction(async () => {
@@ -122,8 +177,7 @@ function ProfileForm({
     try {
       const { upload: data, previewUrl } = await squarePhoto(file);
       setPhoto(previewUrl);
-      const saved = await savePhoto(data);
-      setPhoto(saved.photo);
+      showSaved(await savePhoto(data));
       toast('写真を保存しました');
     } catch (e) {
       setPhoto(initial.photo);
@@ -132,10 +186,24 @@ function ProfileForm({
       if (fileRef.current) fileRef.current.value = '';
     }
   });
+  const shrink = useAction(async () => {
+    if (!photo) return;
+    const before = photoSize;
+    try {
+      const { upload: data } = await shrinkPhoto(photo, initial.photoRecommendedKB ?? 800);
+      const saved = await savePhoto(data);
+      showSaved(saved);
+      toast(before && saved.photoSize ? `写真を小さくしました（${kb(before)} → ${kb(saved.photoSize)}）` : '写真を小さくしました');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '写真を小さくできませんでした', 'error');
+    }
+  });
   const remove = useAction(async () => {
     try {
       await deletePhoto();
       setPhoto(null);
+      setPhotoSize(null);
+      setPhotoLarge(false);
       setConfirmDelete(false);
       toast('写真を削除しました');
     } catch (e) {
@@ -190,6 +258,18 @@ function ProfileForm({
             </div>
           </div>
         </div>
+        {photo && photoLarge && photoSize != null && (
+          <Notice>
+            <div className="stack-sm">
+              <p>写真が大きめです（{kb(photoSize)}）。表示が遅くなることがあります。</p>
+              <div>
+                <Button variant="secondary" onClick={() => void shrink.run()} pending={shrink.pending} pendingLabel="小さくしています…" disabled={upload.pending}>
+                  画質を下げる
+                </Button>
+              </div>
+            </div>
+          </Notice>
+        )}
         <TextField
           label="担当の楽器"
           hint="「、」で区切って入力（例: ピアノ、ドラム）"

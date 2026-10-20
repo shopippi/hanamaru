@@ -52,6 +52,8 @@ export interface ProfileView {
   photoSize?: number | null;
   /** おすすめの大きさ（設定値）を超えている。編集画面に「画質を下げる」を出す */
   photoLarge?: boolean;
+  /** おすすめの大きさ（KB、設定値）。「画質を下げる」はこの大きさに収まるまで下げる */
+  photoRecommendedKB?: number;
 }
 
 type Teacher = typeof teachers.$inferSelect;
@@ -83,6 +85,7 @@ function view(t: Teacher, path: string, meta: PhotoMeta | undefined, recommended
     photo: withVersion(path, meta),
     photoSize: meta?.size ?? null,
     photoLarge: !!meta && meta.size > recommendedKB * 1024,
+    photoRecommendedKB: recommendedKB,
   };
 }
 
@@ -100,7 +103,7 @@ export async function teacherProfilesForStudent(ctx: Ctx, actor: Actor, studentI
     .filter((t): t is Teacher => !!t)
     .map((t) => {
       // 生徒の画面には写真の大きさは要らない
-      const { photoSize: _size, photoLarge: _large, ...v } = view(t, `/api/students/${s.id}/teachers/${t.id}/photo`, versions.get(t.id), teacherPhotoRecommendedKB);
+      const { photoSize: _size, photoLarge: _large, photoRecommendedKB: _kb, ...v } = view(t, `/api/students/${s.id}/teachers/${t.id}/photo`, versions.get(t.id), teacherPhotoRecommendedKB);
       return v;
     });
 }
