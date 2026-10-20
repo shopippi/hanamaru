@@ -9,7 +9,7 @@ test('AU-01 講師のアカウントは管理画面に入れない', async ({ pa
 test('SR-06 講師には住所が表示されず、講師用備考を書ける', async ({ page }) => {
   await login(page, STAFF, 'teacher@example.test');
   await expect(page.getByRole('heading', { name: '担当レッスン' })).toBeVisible();
-  await page.getByRole('link', { name: '担当生徒' }).click();
+  await page.getByRole('navigation').getByRole('link', { name: '担当生徒', exact: true }).click();
   await page.getByRole('link', { name: '山田 太郎' }).click();
   await expect(page.getByLabel('講師用備考')).toHaveValue(/左手/);
   await expect(page.getByText('千代田区')).toHaveCount(0);
@@ -17,7 +17,7 @@ test('SR-06 講師には住所が表示されず、講師用備考を書ける',
 
 test('AV-01 講師の空き時間の画面', async ({ page }) => {
   await login(page, STAFF, 'teacher@example.test');
-  await page.getByRole('link', { name: '空き時間' }).click();
+  await page.getByRole('navigation').getByRole('link', { name: '空き時間', exact: true }).click();
   await expect(page.getByRole('heading', { name: '曜日ごとの空き時間' })).toBeVisible();
   await expect(page.getByRole('button', { name: '保存する' })).toBeDisabled();
 });
