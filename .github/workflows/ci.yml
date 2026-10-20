@@ -42,3 +42,17 @@ jobs:
         with:
           name: e2e-results
           path: e2e/test-results
+
+  images:
+    # 本番・検証環境のイメージが作れること（infra/）
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f infra/Dockerfile --target api -t hanamaru-api:ci .
+      - run: docker build -f infra/Dockerfile --target web -t hanamaru-web:ci .
+      - run: docker build infra/backup -t hanamaru-backup:ci
+      - run: >-
+          docker run --rm -v "$PWD/infra:/etc/caddy:ro"
+          -e STUDENT_HOST=student.example.test -e STAFF_HOST=staff.example.test -e MANAGE_HOST=manage.example.test
+          caddy:2.10-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile

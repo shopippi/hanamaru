@@ -44,7 +44,11 @@ const ctx: Ctx = {
   urls: { student: env.STUDENT_URL, staff: env.STAFF_URL, manage: env.MANAGE_URL },
 };
 
-if (!env.TURNSTILE_SECRET) console.warn('TURNSTILE_SECRET is not set: captcha checks are disabled');
+if (!env.TURNSTILE_SECRET) {
+  // フォームのボット対策（NF-06）を本番で外さない。検証環境は Turnstile のテスト用キーを使う
+  if (process.env.NODE_ENV === 'production') throw new Error('TURNSTILE_SECRET is required in production');
+  console.warn('TURNSTILE_SECRET is not set: captcha checks are disabled');
+}
 
 const app = createApp({
   ctx,

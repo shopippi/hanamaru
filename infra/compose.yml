@@ -1,0 +1,90 @@
+# 本番・検証環境（VPS）。受信ポートは開けず、Cloudflare Tunnel だけで公開する（5.2、NF-01）。
+#   cp infra/env.example infra/.env   # 値を埋める（リポジトリには入れない）
+#   bash infra/deploy.sh v0.1.0
+# 本番と検証環境は、別の VPS（または別の .env と COMPOSE_PROJECT_NAME）で同じ構成を動かす（7.2）
+
+name: ${COMPOSE_PROJECT_NAME:-hanamaru}
+
+services:
+  db:
+    image: postgres:17.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hanamaru
+      POSTGRES_USER: hanamaru
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      TZ: Asia/Tokyo
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hanamaru -d hanamaru"]
+      interval: 5s
+      retries: 30
+
+  api:
+    build: { context: .., dockerfile: infra/Dockerfile, target: api }
+    image: hanamaru-api:${RELEASE:-local}
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://hanamaru:${POSTGRES_PASSWORD}@db:5432/hanamaru
+      STUDENT_URL: https://${STUDENT_HOST}
+      STAFF_URL: https://${STAFF_HOST}
+      MANAGE_URL: https://${MANAGE_HOST}
+      COOKIE_SECURE: "true"
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:?set STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:?set STRIPE_WEBHOOK_SECRET}
+      STRIPE_PORTAL_CONFIGURATION_ID: ${STRIPE_PORTAL_CONFIGURATION_ID:-}
+      TURNSTILE_SECRET: ${TURNSTILE_SECRET:-}
+      JOB_INTERVAL_MINUTES: "5"
+      TZ: Asia/Tokyo
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      target: web
+      args:
+        VITE_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+    image: hanamaru-web:${RELEASE:-local}
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      STUDENT_HOST: ${STUDENT_HOST}
+      STAFF_HOST: ${STAFF_HOST}
+      MANAGE_HOST: ${MANAGE_HOST}
+
+  # Cloudflare Tunnel。ダッシュボードで「公開ホスト名 → http://web:80」を3つ登録する（docs/operations.md）
+  tunnel:
+    image: cloudflare/cloudflared:2025.10.0
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on: [web]
+
+  # 毎日のバックアップを Cloudflare R2 に送る（5.4）
+  backup:
+    build: { context: backup }
+    image: hanamaru-backup:${RELEASE:-local}
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      PGHOST: db
+      PGUSER: hanamaru
+      PGDATABASE: hanamaru
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      BACKUP_HOUR: "3"
+      TZ: Asia/Tokyo
+    volumes:
+      - backups:/backups
+
+volumes:
+  db:
+  backups:

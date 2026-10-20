@@ -1,0 +1,72 @@
+# 3つのサブドメインの振り分け（4.4）。手前は Cloudflare Tunnel なので、ここは HTTP で受ける。
+#   student.<domain>/api/* → API の /api/student/*
+#   staff.<domain>/api/*   → API の /api/staff/*
+#   manage.<domain>/api/*  → API の /api/manage/*（手前に Cloudflare Access）
+# それ以外は各画面の静的ファイル（ないパスは index.html を返す）
+
+{
+	auto_https off
+	admin off
+}
+
+(common) {
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		-Server
+	}
+	encode gzip
+}
+
+(spa) {
+	# ファイル名にハッシュが付いたものは長く保存し、index.html と sw.js は毎回確かめる（PW-05）
+	@hashed path /assets/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	@fresh path / /index.html /sw.js /manifest.webmanifest
+	header @fresh Cache-Control "no-cache"
+	try_files {path} /index.html
+	file_server
+}
+
+http://{$STUDENT_HOST} {
+	import common
+	# Stripe の通知（Webhook）。管理のサブドメインは Cloudflare Access の内側なので、こちらで受ける
+	handle /api/stripe/* {
+		reverse_proxy api:3000
+	}
+	handle_path /api/* {
+		rewrite * /api/student{path}
+		reverse_proxy api:3000
+	}
+	handle {
+		root * /srv/student
+		import spa
+	}
+}
+
+http://{$STAFF_HOST} {
+	import common
+	handle_path /api/* {
+		rewrite * /api/staff{path}
+		reverse_proxy api:3000
+	}
+	handle {
+		root * /srv/staff
+		import spa
+	}
+}
+
+http://{$MANAGE_HOST} {
+	import common
+	handle_path /api/* {
+		rewrite * /api/manage{path}
+		reverse_proxy api:3000
+	}
+	handle {
+		root * /srv/manage
+		import spa
+	}
+}
