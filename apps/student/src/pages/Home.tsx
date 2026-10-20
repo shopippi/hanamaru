@@ -18,8 +18,9 @@ import {
   useLoad,
   useToast,
 } from '@hanamaru/ui';
-import { api, type Home as HomeData } from '../api.js';
+import { api, type Home as HomeData, type TeacherProfile } from '../api.js';
 import { AddToHomeGuide } from '../notices.js';
+import { TeacherCard } from '../teacher-card.js';
 import { useStudent } from '../student-context.js';
 
 // 生徒のトップ。今月の残り回数・次の予約・お支払い状況を大きく出し、1画面で状況が分かる（MB-01）
@@ -252,6 +253,7 @@ export function Home() {
                   {h.autopay && <p className="small muted">毎月1日に自動でお支払いします</p>}
                 </section>
               </div>
+              <HomeTeachers studentId={current.id} />
               {h.student.scheduledStatus && h.student.scheduledStatusAt && (
                 <Notice>
                   {fmtDate(h.student.scheduledStatusAt)}から{h.student.scheduledStatus === 'suspended' ? '休会' : '退会'}となります。
@@ -259,10 +261,31 @@ export function Home() {
               )}
             </>
           )}
-          <AddToHomeGuide />
+          {/* ホーム画面への追加の案内は、入会して在籍中になってから（PW-03、MB-06） */}
+          {h.student.status === 'active' && <AddToHomeGuide />}
           <p className="small muted center">解約・休会は教室にご連絡ください。</p>
         </div>
       )}
     </Loadable>
+  );
+}
+
+/** 担当の講師（TC-05）。押すとプロフィールが開き、講師のページからレビューを書ける */
+function HomeTeachers({ studentId }: { studentId: string }) {
+  const { data } = useLoad(() => api.get<TeacherProfile[]>(`/students/${studentId}/teachers`), [studentId]);
+  if (!data || data.length === 0) return null;
+  return (
+    <section className="stack-sm" aria-labelledby="home-teachers">
+      <h2 className="section-label" id="home-teachers">
+        担当の講師
+      </h2>
+      {data.map((t) => (
+        <TeacherCard key={t.teacherId} teacher={t} compact>
+          <Link to="/teachers" className="small">
+            {t.name}先生へのレビューを書く
+          </Link>
+        </TeacherCard>
+      ))}
+    </section>
   );
 }
