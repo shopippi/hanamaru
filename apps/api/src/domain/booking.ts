@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, lt, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import {
   creditLedger,
@@ -9,6 +9,7 @@ import {
   rooms,
   students,
   teachers,
+  trialRequests,
 } from '../db/schema.js';
 import { addDays, dateOf, DAY_MS, HOUR_MS, jst, monthOf, startOfMonth, weekdayOf, type DateStr, type Month } from '../lib/time.js';
 import {
@@ -122,6 +123,33 @@ export async function studentBookingBlocker(
 // 内部の処理（トランザクションの中で呼ぶ）
 // ---------------------------------------------------------------------------
 
+/**
+ * 同じ生徒の予約・変更を順番に処理する。回数の確認はこのロックを取ってから行い、
+ * 同時に別の講師を予約しても、回数より多く予約できないようにする（RS-01）
+ */
+async function lockStudent(db: Db, studentId: string): Promise<Student> {
+  const [s] = await db.select().from(students).where(eq(students.id, studentId)).for('update');
+  if (!s) throw notFound('生徒が見つかりません');
+  return s;
+}
+
+/** 同じ生徒が同じ時間に別の予約を持っていないか（同じ枠に2席・時間の重なる予約を防ぐ） */
+async function assertNoOverlap(db: Db, studentId: string, startsAt: Date, endsAt: Date): Promise<void> {
+  const rows = await db
+    .select({ id: reservations.id })
+    .from(reservations)
+    .where(
+      and(
+        eq(reservations.studentId, studentId),
+        inArray(reservations.status, ['pending', 'confirmed']),
+        lt(reservations.startsAt, endsAt),
+        gt(reservations.endsAt, startsAt),
+      ),
+    )
+    .limit(1);
+  if (rows.length) throw ruleViolation('この時間には、すでに別の予約があります');
+}
+
 /** 同じ講師（と部屋）への同時の予約を順番に処理する */
 async function lockTeacher(db: Db, teacherId: string, roomId: string | null): Promise<void> {
   await db.select({ id: teachers.id }).from(teachers).where(eq(teachers.id, teacherId)).for('update');
@@ -221,8 +249,16 @@ async function cancelInTx(
 async function cancelNotices(db: Db, r: Reservation, kind: CancelKind, refunded: boolean, toAdmins: boolean): Promise<Notice[]> {
   const d = await describe(db, r);
   const notices: Notice[] = [];
-  const message = messages.reservationCancelled(d, CANCEL_REASON_LABEL[kind] ?? kind, refunded);
+  const reason = CANCEL_REASON_LABEL[kind] ?? kind;
+  const message = messages.reservationCancelled(d, reason, refunded);
   if (d.student) notices.push({ type: 'reservation_cancelled', to: await recipientOfStudent(db, d.student), message });
+  // 体験レッスンの申込者にも知らせる（NT-01）
+  if (r.trialRequestId) {
+    const [req] = await db.select().from(trialRequests).where(eq(trialRequests.id, r.trialRequestId));
+    if (req) {
+      notices.push({ type: 'reservation_cancelled', to: { email: req.email }, message: messages.trialCancelled({ ...d, studentName: req.name }, reason) });
+    }
+  }
   if (toAdmins) {
     for (const to of await adminRecipients(db)) notices.push({ type: 'reservation_cancelled', to, message });
   }
@@ -233,7 +269,7 @@ async function cancelNotices(db: Db, r: Reservation, kind: CancelKind, refunded:
 export async function cancelForCause(
   db: Db,
   list: Reservation[],
-  kind: 'teacher' | 'school' | 'unpaid',
+  kind: 'teacher' | 'school' | 'unpaid' | 'admin',
   actor: Actor,
   now: Date,
 ): Promise<Notice[]> {
@@ -258,13 +294,16 @@ export interface BookInput {
   startsAt: Date;
 }
 
-async function bookStudentInTx(db: Db, ctx: Ctx, student: Student, input: BookInput, actor: Actor): Promise<Reservation> {
+async function bookStudentInTx(db: Db, ctx: Ctx, studentId: string, input: BookInput, actor: Actor): Promise<Reservation> {
   const settings = await getSettings(db);
   const now = ctx.now();
+  // 生徒のロックを取ってから、回数などの条件を確かめる（同時の予約で回数を超えない）
+  const student = await lockStudent(db, studentId);
   const reason = await studentBookingBlocker(db, student, input.startsAt, now, settings);
   if (reason) throw ruleViolation(reason);
   const slot = await findOpenSlot(db, input);
   if (!slot) throw ruleViolation('この枠は予約できません。ほかの時間を選んでください');
+  await assertNoOverlap(db, student.id, slot.startsAt, slot.endsAt);
   await lockTeacher(db, slot.teacherId, slot.roomId);
   // ロックを取ってから、もう一度空きを確かめる
   const again = await findOpenSlot(db, input);
@@ -278,7 +317,7 @@ export async function bookAsStudent(ctx: Ctx, actor: Actor, input: BookInput): P
   const student = await studentForActor(ctx.db, actor, input.studentId);
   // 担当外の講師はサーバー側で拒否する（TC-03）。担当を外した講師も同じ（TC-04）
   if (!(await isAssigned(ctx.db, student.id, input.teacherId))) throw forbidden('この講師の枠は予約できません');
-  const r = await ctx.db.transaction((tx) => bookStudentInTx(tx, ctx, student, input, actor));
+  const r = await ctx.db.transaction((tx) => bookStudentInTx(tx, ctx, student.id, input, actor));
   const d = await describe(ctx.db, r);
   await flush(ctx, [
     {
@@ -347,8 +386,9 @@ export async function changeAsStudent(
   const student = await loadStudent(ctx.db, r.studentId!);
   if (!(await isAssigned(ctx.db, student.id, next.teacherId))) throw forbidden('この講師の枠は予約できません');
   const created = await ctx.db.transaction(async (tx) => {
+    await lockStudent(tx, student.id);
     await cancelInTx(tx, r, 'rescheduled', true, actor, now);
-    return bookStudentInTx(tx, ctx, student, { studentId: student.id, ...next }, actor);
+    return bookStudentInTx(tx, ctx, student.id, { studentId: student.id, ...next }, actor);
   });
   const d = await describe(ctx.db, created);
   await flush(ctx, [
@@ -428,8 +468,10 @@ export async function bookAsAdmin(
     throw ruleViolation('担当講師ではありません。先に担当講師に設定してください');
   }
   const reservation = await ctx.db.transaction(async (tx) => {
+    await lockStudent(tx, student.id);
     const slot = await findOpenSlot(tx, input);
     if (!slot) throw ruleViolation('この枠は予約できません（空き時間外か、埋まっています）');
+    await assertNoOverlap(tx, student.id, slot.startsAt, slot.endsAt);
     await lockTeacher(tx, slot.teacherId, slot.roomId);
     const again = await findOpenSlot(tx, input);
     if (!again) throw ruleViolation('この枠は先に予約されました');
@@ -470,7 +512,13 @@ export async function decidePending(ctx: Ctx, actor: Actor, reservationId: strin
   if (r.status !== 'pending') throw conflict('仮予約ではありません');
   if (approve) {
     await ctx.db.transaction(async (tx) => {
-      await tx.update(reservations).set({ status: 'confirmed' }).where(eq(reservations.id, r.id));
+      // 確認のあとに生徒が取り消していたら、取り消した予約を戻さない
+      const updated = await tx
+        .update(reservations)
+        .set({ status: 'confirmed' })
+        .where(and(eq(reservations.id, r.id), eq(reservations.status, 'pending')))
+        .returning({ id: reservations.id });
+      if (updated.length === 0) throw conflict('この仮予約はすでに取り消されています');
       await audit(tx, actor, 'reservation.approve', 'reservation', r.id);
     });
     const d = await describe(ctx.db, r);
@@ -536,10 +584,15 @@ export async function createSeries(ctx: Ctx, actor: Actor, input: SeriesInput) {
     const startsAt = jst(d, input.startTime);
     try {
       const r = await ctx.db.transaction(async (tx) => {
+        await lockStudent(tx, student.id);
         const slot = await findOpenSlot(tx, { ...input, startsAt });
         if (!slot) throw ruleViolation('空き時間外か、埋まっています');
+        await assertNoOverlap(tx, student.id, slot.startsAt, slot.endsAt);
         await lockTeacher(tx, slot.teacherId, slot.roomId);
-        return insertReservation(tx, student, slot, 'confirmed', actor, series!.id);
+        // ロックを取ってから、もう一度空きを確かめる（その間に生徒が予約していることがある）
+        const again = await findOpenSlot(tx, { ...input, startsAt });
+        if (!again) throw ruleViolation('先に予約が入りました');
+        return insertReservation(tx, student, again, 'confirmed', actor, series!.id);
       });
       created.push(r);
     } catch (e) {
@@ -563,21 +616,26 @@ export async function createSeries(ctx: Ctx, actor: Actor, input: SeriesInput) {
 /** 回数が足りない月の一覧（管理画面の警告。RS-07） */
 export async function creditShortages(db: Db, now: Date) {
   const cur = monthOf(now);
+  // 先に予約できる回数は足すだけなので、合計がマイナスの月だけを調べればよい
+  const total = sql<number>`sum(${creditLedger.delta})::int`;
   const rows = await db
-    .select({ studentId: creditLedger.studentId, month: creditLedger.month, total: sql<number>`sum(${creditLedger.delta})::int` })
+    .select({ studentId: creditLedger.studentId, month: creditLedger.month, total })
     .from(creditLedger)
     .where(gte(creditLedger.month, cur))
-    .groupBy(creditLedger.studentId, creditLedger.month);
+    .groupBy(creditLedger.studentId, creditLedger.month)
+    .having(sql`sum(${creditLedger.delta}) < 0`);
+  if (rows.length === 0) return [];
+  const list = await db.select().from(students).where(inArray(students.id, [...new Set(rows.map((r) => r.studentId))]));
+  const byId = new Map(list.map((s) => [s.id, s]));
   const out: { studentId: string; studentName: string; month: Month; shortBy: number }[] = [];
   for (const r of rows) {
-    const [s] = await db.select().from(students).where(eq(students.id, r.studentId));
+    const s = byId.get(r.studentId);
     if (!s) continue;
     const available = await availableCredits(db, s, r.month, now);
     if (available < 0) out.push({ studentId: s.id, studentName: s.name, month: r.month, shortBy: -available });
   }
   return out;
 }
-
 
 /** 今後の有効な予約（講師・期間で絞る） */
 export async function activeReservationsBetween(db: Db, opts: { teacherId?: string; from: Date; to?: Date }) {

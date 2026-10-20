@@ -6,6 +6,7 @@ import {
   closures,
   lessonTypes,
   reservations,
+  teachers,
 } from '../db/schema.js';
 import { addDays, jst, minutesOf, weekdayOf, type DateStr } from '../lib/time.js';
 import { getSettings, type Settings } from './settings.js';
@@ -108,13 +109,34 @@ function* datesBetween(from: DateStr, to: DateStr): Generator<DateStr> {
   for (let d = from; d <= to; d = addDays(d, 1)) yield d;
 }
 
-/** 予約が空き時間の中に収まっているか（AV-02 で影響する予約を探すのに使う） */
+/**
+ * 予約が空き時間の中に収まっているかを調べる関数を返す（AV-02 で影響する予約を探すのに使う）。
+ * 空き時間は from〜to の分をまとめて1回だけ読み込む
+ */
+export async function availabilityChecker(
+  db: Db,
+  teacherId: string,
+  from: DateStr,
+  to: DateStr,
+): Promise<(r: { lessonTypeId: string; startsAt: Date; endsAt: Date }, date: DateStr) => boolean> {
+  const data = await loadData(db, [teacherId], from, to);
+  return (r, date) => covered(data, { ...r, teacherId }, date);
+}
+
+/** 予約が空き時間の中に収まっているか */
 export async function isCoveredByAvailability(
   db: Db,
   r: { teacherId: string; lessonTypeId: string; startsAt: Date; endsAt: Date },
   date: DateStr,
 ): Promise<boolean> {
-  const data = await loadData(db, [r.teacherId], date, date);
+  return covered(await loadData(db, [r.teacherId], date, date), r, date);
+}
+
+function covered(
+  data: AvailabilityData,
+  r: { teacherId: string; lessonTypeId: string; startsAt: Date; endsAt: Date },
+  date: DateStr,
+): boolean {
   const { windows, blocked } = windowsFor(data, r.teacherId, date);
   const dayStart = jst(date).getTime();
   const iv = { start: (r.startsAt.getTime() - dayStart) / 60000, end: (r.endsAt.getTime() - dayStart) / 60000 };
@@ -130,6 +152,13 @@ export async function listSlots(
   db: Db,
   opts: { teacherIds: string[]; from: DateStr; to: DateStr; forTrial?: boolean; excludeReservationId?: string },
 ): Promise<Slot[]> {
+  // 無効にした講師の枠は出さない（新しい予約を止める。既存の予約は残る）
+  const teacherIds = opts.teacherIds.length
+    ? (await db.select({ id: teachers.id }).from(teachers).where(and(inArray(teachers.id, opts.teacherIds), eq(teachers.active, true)))).map(
+        (t) => t.id,
+      )
+    : [];
+  opts = { ...opts, teacherIds: opts.teacherIds.filter((id) => teacherIds.includes(id)) };
   const data = await loadData(db, opts.teacherIds, opts.from, opts.to);
   const types = new Map((await db.select().from(lessonTypes)).map((t) => [t.id, t]));
   const rangeStart = jst(opts.from);

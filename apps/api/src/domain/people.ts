@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client.js';
 import {
@@ -20,7 +20,9 @@ import { issueInvite, normalizeEmail, type Account } from './auth.js';
 import type { Actor, Ctx } from './context.js';
 import { conflict, forbidden, invalid, notFound } from './errors.js';
 import { parseCsv } from '../lib/csv.js';
-import { resumeBilling, stopBilling } from './billing.js';
+import { applyBillingChange, assertCanSwitchToCard, resumeBilling, stopBilling, undoStopBilling } from './billing.js';
+import { cancelForCause, sendNotices } from './booking.js';
+import { DomainError } from './errors.js';
 
 // 生徒・講師の登録と管理（3.2、3.3、3.9）
 
@@ -74,11 +76,10 @@ async function findOrCreateStudentAccount(
   return { account: account!, created: true };
 }
 
-/** 管理者が生徒を1件登録する（ST-01）。新しいアカウントには招待メールを送る */
-export async function createStudent(ctx: Ctx, actor: Actor, raw: unknown) {
-  assertAdmin(actor);
-  const input = parse(studentInput, raw);
-  const result = await ctx.db.transaction(async (tx) => {
+type ParsedStudent = z.output<typeof studentInput>;
+
+/** 生徒の行を作る（トランザクションの中で呼ぶ） */
+async function insertStudent(tx: Db, actor: Actor, input: ParsedStudent) {
     const { account, created } = await findOrCreateStudentAccount(tx, input.accountEmail, input.guardianName ?? input.name);
     const [student] = await tx
       .insert(students)
@@ -100,9 +101,22 @@ export async function createStudent(ctx: Ctx, actor: Actor, raw: unknown) {
     }
     await audit(tx, actor, 'student.create', 'student', student!.id, { name: input.name, accountEmail: input.accountEmail });
     return { student: student!, account, created };
-  });
+}
+
+/** 管理者が生徒を1件登録する（ST-01）。新しいアカウントには招待メールを送る */
+export async function createStudent(ctx: Ctx, actor: Actor, raw: unknown) {
+  assertAdmin(actor);
+  const input = parse(studentInput, raw);
+  const result = await ctx.db.transaction((tx) => insertStudent(tx, actor, input));
   if (result.created || !result.account.passwordHash) await issueInvite(ctx, result.account);
   return result.student;
+}
+
+/** CSV の取り込みを、誤りのある行を返して取りやめる目印 */
+class CsvRejected extends Error {
+  constructor(readonly errors: { line: number; message: string }[]) {
+    super('csv rejected');
+  }
 }
 
 const CSV_COLUMNS = ['ログインメール', '保護者名', '生徒名', '電話番号', '生徒のメール', '住所'] as const;
@@ -119,35 +133,65 @@ export async function importStudentsCsv(ctx: Ctx, actor: Actor, csv: string) {
     throw invalid(`1行目の見出しは「${CSV_COLUMNS.join(',')}」にしてください`);
   }
   const errors: { line: number; message: string }[] = [];
-  const inputs: StudentInput[] = [];
+  const inputs: { line: number; input: ParsedStudent }[] = [];
   rows.forEach((cols, i) => {
     if (cols.every((c) => !c.trim())) return;
     const [accountEmail, guardianName, name, phone, studentEmail, address] = cols;
     const r = studentInput.safeParse({ accountEmail, guardianName, name, phone, email: studentEmail ?? '', address });
     if (!r.success) errors.push({ line: i + 2, message: r.error.issues[0]?.message ?? '入力に誤りがあります' });
-    else inputs.push(r.data);
+    else inputs.push({ line: i + 2, input: r.data });
   });
   if (errors.length) return { created: 0, errors };
-  const created = [];
-  for (const input of inputs) created.push(await createStudent(ctx, actor, input));
-  return { created: created.length, errors };
+  // 全行を1つのトランザクションで登録し、1行でも登録できなければ何も残さない。招待メールは確定してから送る
+  let results: Awaited<ReturnType<typeof insertStudent>>[];
+  try {
+    results = await ctx.db.transaction(async (tx) => {
+      const done: Awaited<ReturnType<typeof insertStudent>>[] = [];
+      const rejected: { line: number; message: string }[] = [];
+      for (const { line, input } of inputs) {
+        try {
+          done.push(await insertStudent(tx, actor, input));
+        } catch (e) {
+          if (!(e instanceof DomainError)) throw e;
+          rejected.push({ line, message: e.message });
+        }
+      }
+      if (rejected.length) throw new CsvRejected(rejected);
+      return done;
+    });
+  } catch (e) {
+    if (e instanceof CsvRejected) return { created: 0, errors: e.errors };
+    throw e;
+  }
+  const invited = new Set<string>();
+  for (const r of results) {
+    if ((r.created || !r.account.passwordHash) && !invited.has(r.account.id)) {
+      invited.add(r.account.id);
+      await issueInvite(ctx, r.account);
+    }
+  }
+  return { created: results.length, errors };
 }
 
+/** 編集では、送られてきた項目だけを変える（既定値で上書きしない） */
 export const studentPatch = studentInput
-  .omit({ accountEmail: true, status: true, teacherIds: true })
-  .partial()
-  .extend({ lineUserId: optionalText });
+  .omit({ accountEmail: true, status: true, teacherIds: true, billingMethod: true })
+  .extend({ billingMethod: z.enum(['card', 'konbini', 'paypay', 'cash']), lineUserId: optionalText })
+  .partial();
 
-/** 生徒の基本情報の編集（SR-01） */
+/** 生徒の基本情報の編集（SR-01）。コース・支払い方法の変更は課金にも反映する */
 export async function updateStudent(ctx: Ctx, actor: Actor, studentId: string, raw: unknown) {
   assertAdmin(actor);
   const patch = parse(studentPatch, raw);
-  await loadStudent(ctx.db, studentId);
-  return ctx.db.transaction(async (tx) => {
+  const before = await loadStudent(ctx.db, studentId);
+  assertCanSwitchToCard(before, patch.billingMethod);
+  const updated = await ctx.db.transaction(async (tx) => {
     const [s] = await tx.update(students).set(patch).where(eq(students.id, studentId)).returning();
     await audit(tx, actor, 'student.update', 'student', studentId, patch);
     return s!;
   });
+  await applyBillingChange(ctx, before, updated);
+  return loadStudent(ctx.db, studentId);
 }
 
 /**
@@ -166,10 +210,13 @@ export async function changeStudentStatus(
   const leaving = status === 'withdrawn' || status === 'suspended';
   const deferred = leaving && !opts.immediately;
   const at = startOfMonth(addMonths(monthOf(ctx.now()), 1));
-  // 課金は翌月1日から止める（今月分は返金しない）。休会から戻ると翌月1日から再開する
+  // 課金は翌月1日から止める（今月分は返金しない）。休会から戻ると翌月1日から再開する。
+  // 予定していた退会・休会を取りやめたときは、止める設定にした課金を元に戻す
   if (leaving) await stopBilling(ctx, s);
   else if (status === 'active' && s.status === 'suspended') await resumeBilling(ctx, s);
-  return ctx.db.transaction(async (tx) => {
+  else if (status === 'active' && s.status === 'active' && s.scheduledStatus) await undoStopBilling(ctx, s);
+  const effectiveAt = deferred ? at : ctx.now();
+  const result = await ctx.db.transaction(async (tx) => {
     const [updated] = await tx
       .update(students)
       .set(
@@ -179,13 +226,30 @@ export async function changeStudentStatus(
       )
       .where(eq(students.id, studentId))
       .returning();
+    // 退会・休会の日より後の予約は、支払いのない月の分なので取り消して回数を戻す（ST-05）
+    const later = leaving
+      ? await tx
+          .select()
+          .from(reservations)
+          .where(
+            and(
+              eq(reservations.studentId, studentId),
+              inArray(reservations.status, ['pending', 'confirmed']),
+              gte(reservations.startsAt, effectiveAt),
+            ),
+          )
+      : [];
+    const notices = await cancelForCause(tx, later, 'admin', actor, ctx.now());
     await audit(tx, actor, 'student.status', 'student', studentId, {
       from: s.status,
       to: status,
       effectiveAt: deferred ? at.toISOString() : 'now',
+      cancelled: later.map((r) => r.id),
     });
-    return updated!;
+    return { updated: updated!, notices };
   });
+  await sendNotices(ctx, result.notices);
+  return result.updated;
 }
 
 /** 予定していた退会・休会を、その日が来たら反映する（定期処理） */
