@@ -75,7 +75,7 @@ describe('PY-03 / PY-05 入会の支払い', () => {
   test('入金確定の通知を受けてから回数を付け、在籍中にし、翌月1日開始のサブスクリプションを作る', async () => {
     const { f, enrolling, pkg, paidEvent, reload } = await billingWorld();
     const { student, actor } = await enrolling('太郎');
-    const { url } = await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card' });
+    const { url } = await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card', agreed: true });
     expect(url).toMatch(/^https:\/\/checkout\.stripe\.test\//);
     const checkout = f.gateway.checkouts.at(-1)!;
     expect(checkout).toMatchObject({ amount: 19800, method: 'card', saveCard: true, successUrl: 'https://student.example.test/?checkout=done' });
@@ -114,7 +114,7 @@ describe('PY-03 / PY-05 入会の支払い', () => {
   test('同じ通知が2回届いても、回数を二重に付けない（OP-02）', async () => {
     const { f, enrolling, pkg, paidEvent } = await billingWorld();
     const { student, actor } = await enrolling('太郎');
-    await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card' });
+    await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card', agreed: true });
     const ev = paidEvent(f.gateway.checkouts.at(-1)!.paymentId);
     expect(await handlePaymentEvent(f.ctx, ev)).toBe('processed');
     expect(await handlePaymentEvent(f.ctx, ev)).toBe('duplicate');
@@ -127,7 +127,7 @@ describe('PY-03 / PY-05 入会の支払い', () => {
   test('通知が届かなくても、定期的な照合で入金を反映する（OP-02）', async () => {
     const { f, enrolling, pkg } = await billingWorld();
     const { student, actor } = await enrolling('太郎');
-    await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card' });
+    await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card', agreed: true });
     const cs = f.gateway.checkouts.at(-1)!;
     f.gateway.checkoutStatuses.set(cs.id, { status: 'paid', paymentMethodId: 'pm_1' });
     f.clock.now = new Date(f.clock.now.getTime() + 60 * 60_000);
@@ -196,7 +196,7 @@ describe('PY-09 / PY-16 月初の請求と入金状況', () => {
   test('入会した月の分は、月初の請求を作らない', async () => {
     const { f, enrolling, pkg, paidEvent } = await billingWorld(jst('2026-11-03', '10:00'));
     const { student, actor } = await enrolling('太郎');
-    await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card' });
+    await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card', agreed: true });
     await handlePaymentEvent(f.ctx, paidEvent(f.gateway.checkouts.at(-1)!.paymentId));
     await prepareMonth(f.ctx, '2026-11');
     const rows = await f.db.select().from(payments).where(and(eq(payments.studentId, student.id), eq(payments.kind, 'monthly')));
@@ -249,7 +249,7 @@ describe('PY-12 / PY-13 / ST-05 兄弟・解約', () => {
     const first = await enrolling('長女');
     const second = await enrolling('長男', first.account);
     for (const s of [first, second]) {
-      await startEnrollment(f.ctx, first.actor, s.student.id, { packageId: pkg.id, method: 'card' });
+      await startEnrollment(f.ctx, first.actor, s.student.id, { packageId: pkg.id, method: 'card', agreed: true });
       await handlePaymentEvent(f.ctx, paidEvent(f.gateway.checkouts.at(-1)!.paymentId));
     }
     expect(f.gateway.customers).toHaveLength(2);
@@ -260,7 +260,7 @@ describe('PY-12 / PY-13 / ST-05 兄弟・解約', () => {
   test('退会・休会で翌月1日から課金を止め、休会から戻ると翌月1日から再開する', async () => {
     const { f, enrolling, pkg, paidEvent, reload } = await billingWorld();
     const { student, actor } = await enrolling('太郎');
-    await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card' });
+    await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card', agreed: true });
     await handlePaymentEvent(f.ctx, paidEvent(f.gateway.checkouts.at(-1)!.paymentId));
     await changeStudentStatus(f.ctx, f.admin, student.id, 'suspended');
     expect(subs(f)[0]!.cancelAtPeriodEnd).toBe(true);
@@ -277,7 +277,7 @@ describe('PY-12 / PY-13 / ST-05 兄弟・解約', () => {
   test('PY-13 / MB-04 生徒の画面には解約の操作がなく、カードの変更は Stripe の画面へのリンクで行う', async () => {
     const { f, enrolling, pkg, paidEvent } = await billingWorld();
     const { student, actor, account } = await enrolling('太郎');
-    await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card' });
+    await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card', agreed: true });
     await handlePaymentEvent(f.ctx, paidEvent(f.gateway.checkouts.at(-1)!.paymentId));
     await f.setPassword(account.id);
     const b = f.browser('student');
@@ -307,7 +307,7 @@ describe('PY-14 月額料金の改定', () => {
   test('既存の生徒にも適用する場合、適用日から次回以降の課金額が変わる', async () => {
     const { f, enrolling, pkg, paidEvent, course } = await billingWorld();
     const { student, actor } = await enrolling('太郎');
-    await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card' });
+    await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card', agreed: true });
     await handlePaymentEvent(f.ctx, paidEvent(f.gateway.checkouts.at(-1)!.paymentId));
     const oldPrice = subs(f)[0]!.priceId;
     await revisePrice(f.ctx, f.admin, course.id, { amount: 15400, applyToExisting: true, effectiveMonth: '2026-12' });
@@ -390,7 +390,7 @@ describe('Stripe の通知（Webhook）', () => {
   test('署名が正しい通知だけを処理する', async () => {
     const { f, enrolling, pkg } = await billingWorld();
     const { student, actor } = await enrolling('太郎');
-    await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card' });
+    await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card', agreed: true });
     const body = JSON.stringify({ id: 'evt_http', type: 'checkout_paid', paymentId: f.gateway.checkouts.at(-1)!.paymentId, sessionId: 'cs', paymentMethodId: 'pm' });
     const bad = await f.app.request('/api/stripe/webhook', { method: 'POST', headers: { 'stripe-signature': 'forged' }, body });
     expect(bad.status).toBe(400);

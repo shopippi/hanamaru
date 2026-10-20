@@ -23,6 +23,7 @@ export const WEBHOOK_EVENTS = [
   'customer.subscription.deleted',
   'invoice.paid',
   'invoice.payment_failed',
+  'invoice.payment_action_required',
 ] as const satisfies readonly Stripe.WebhookEndpointCreateParams.EnabledEvent[];
 
 export class StripeGateway implements PaymentGateway {
@@ -245,7 +246,9 @@ export class StripeGateway implements PaymentGateway {
         return { id: event.id, type: 'subscription_deleted', subscriptionId: event.data.object.id };
       }
       case 'invoice.paid':
-      case 'invoice.payment_failed': {
+      case 'invoice.payment_failed':
+      // 自動課金で本人認証（3-D セキュア）が求められた: 生徒の操作が要るので、失敗と同じにお知らせする（PY-11）
+      case 'invoice.payment_action_required': {
         const inv = event.data.object;
         const subscriptionId = idOf(inv.parent?.subscription_details?.subscription);
         const start = inv.lines.data[0]?.period.start;

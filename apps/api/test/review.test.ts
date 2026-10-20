@@ -32,7 +32,7 @@ async function cardStudent(now?: Date) {
   const pkg = await savePackage(f.ctx, f.admin, null, { name: '入会金＋4回', admissionFee: 5500, lessonCount: 4, lessonsPrice: 14300 });
   const s = await f.mkStudent('太郎', { autopay: false });
   await f.db.update(students).set({ status: 'enrolling', courseId: course.id }).where(eq(students.id, s.student.id));
-  await startEnrollment(f.ctx, s.actor, s.student.id, { packageId: pkg.id, method: 'card' });
+  await startEnrollment(f.ctx, s.actor, s.student.id, { packageId: pkg.id, method: 'card', agreed: true });
   const paymentId = f.gateway.checkouts.at(-1)!.paymentId;
   await handlePaymentEvent(f.ctx, { id: `evt_${paymentId}`, type: 'checkout_paid', paymentId, sessionId: 'cs', paymentMethodId: 'pm_card_visa' });
   const reload = async () => (await f.db.select().from(students).where(eq(students.id, s.student.id)))[0]!;
@@ -125,7 +125,7 @@ describe('PY-03 サブスクリプションの二重作成', () => {
     const pkg = await savePackage(f.ctx, f.admin, null, { name: '入会金＋4回', admissionFee: 5500, lessonCount: 4, lessonsPrice: 14300 });
     const s = await f.mkStudent('太郎', { autopay: false });
     await f.db.update(students).set({ status: 'enrolling', courseId: course.id }).where(eq(students.id, s.student.id));
-    await startEnrollment(f.ctx, s.actor, s.student.id, { packageId: pkg.id, method: 'card' });
+    await startEnrollment(f.ctx, s.actor, s.student.id, { packageId: pkg.id, method: 'card', agreed: true });
     const paymentId = f.gateway.checkouts.at(-1)!.paymentId;
     // Stripe ではできたのに、応答が届かず失敗した（タイムアウトなど）
     const create = f.gateway.createSubscription.bind(f.gateway);

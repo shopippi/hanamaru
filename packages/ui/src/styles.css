@@ -50,7 +50,9 @@
   --s10: 40px;
   --tap: 44px;
 
-  --font: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic UI', 'Meiryo', sans-serif;
+  /* 日本でなじみのあるゴシック体（UI-03）。英数字も同じ書体でそろえる。
+     iPhone・Mac: ヒラギノ角ゴ / Windows: メイリオ / Android: Noto Sans JP（端末の標準） */
+  --font: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Meiryo', 'Noto Sans JP', 'Noto Sans CJK JP', sans-serif;
   --ease: cubic-bezier(0.2, 0, 0, 1);
 
   color-scheme: light;

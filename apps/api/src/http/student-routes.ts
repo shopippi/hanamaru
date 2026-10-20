@@ -98,7 +98,7 @@ export function studentRoutes(deps: AppDeps) {
   // 入会手続き・支払い（PY-01〜05）。Stripe の決済画面の URL を返す
   app.get('/students/:sid/enrollment', async (c) => c.json(await enrollmentOptions(ctx, c.get('actor'), c.req.param('sid'))));
   app.post('/students/:sid/enrollment', async (c) => {
-    const input = await body(c, z.object({ packageId: z.string().uuid(), method: z.enum(['card', 'konbini', 'paypay']) }));
+    const input = await body(c, z.object({ packageId: z.string().uuid(), method: z.enum(['card', 'konbini', 'paypay']), agreed: z.boolean() }));
     return c.json(await startEnrollment(ctx, c.get('actor'), c.req.param('sid'), input));
   });
   // カードの変更は Stripe のカード管理画面で（MB-04）

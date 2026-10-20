@@ -261,8 +261,11 @@ export async function enrollmentOptions(ctx: Ctx, actor: Actor, studentId: strin
   const packages = await listPackages(ctx.db, { activeOnly: true });
   const course = s.courseId ? (await ctx.db.select().from(courses).where(eq(courses.id, s.courseId)))[0] : null;
   const price = s.courseId ? await currentPrice(ctx.db, s.courseId).catch(() => null) : null;
+  const settings = await getSettings(ctx.db);
   return {
     status: s.status,
+    /** 入会画面で同意を取る契約の内容に使う値（3.8 の設定値） */
+    terms: { cancelDeadlineHours: settings.cancelDeadlineHours, graceDays: settings.graceDays },
     packages: packages.map((p) => ({
       id: p.id,
       name: p.name,
@@ -288,10 +291,12 @@ export async function startEnrollment(
   ctx: Ctx,
   actor: Actor,
   studentId: string,
-  input: { packageId: string; method: OnlineMethod },
+  input: { packageId: string; method: OnlineMethod; agreed: boolean },
 ): Promise<{ url: string }> {
   const s = await studentForActor(ctx.db, actor, studentId);
   if (s.status !== 'enrolling') throw ruleViolation('入会手続きはすでに済んでいます');
+  // 契約の内容（期間・自動課金・退会と休会・キャンセル）と利用規約への同意を、お支払いの前に取る
+  if (input.agreed !== true) throw invalid('契約の内容と利用規約への同意が必要です');
   if (!s.approved) throw ruleViolation('教室の承認後に入会手続きができます');
   if (!s.courseId) throw ruleViolation('月額コースが設定されていません。教室にお問い合わせください');
   const [pkg] = await ctx.db.select().from(enrollmentPackages).where(eq(enrollmentPackages.id, input.packageId));
@@ -318,6 +323,8 @@ export async function startEnrollment(
     .set({ stripeCheckoutSessionId: session.id, paymentUrl: session.url })
     .where(eq(payments.id, payment!.id));
   await ctx.db.update(students).set({ billingMethod: input.method }).where(eq(students.id, s.id));
+  // いつ同意したかを残す（入会時の同意の記録）
+  await audit(ctx.db, actor, 'student.terms_agreed', 'student', s.id, { paymentId: payment!.id, packageId: pkg.id, method: input.method });
   return { url: session.url };
 }
 
@@ -517,7 +524,10 @@ export async function handlePaymentEvent(ctx: Ctx, ev: PaymentEvent): Promise<'p
         if (!p) return { status: 'ignored' as const, notices: [] };
         // 通知の順番は保証されない。入金済みの月に遅れて失敗の通知が届いても、失敗のメールは送らない
         if (p.status === 'succeeded') return { status: 'processed' as const, notices: [] };
+        // Stripe は失敗した請求を何度か引き落とし直す。メールは最初に失敗したときの1通だけにする
+        const alreadyNotified = p.status === 'failed';
         await markFailed(tx, p, 'invoice_payment_failed');
+        if (alreadyNotified) return { status: 'processed' as const, notices: [] };
         const student = await loadStudent(tx, p.studentId);
         const settings = await getSettings(tx);
         // 猶予期間の最後の日（その翌日 0:00 に取り消す。PY-10）

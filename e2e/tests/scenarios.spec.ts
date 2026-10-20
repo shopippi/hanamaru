@@ -89,6 +89,7 @@ test('ST-01 / AU-03 / PY-01〜05 / SR-02 / OP-04 / MB-03 / UI-12 管理者が登
   await s.getByRole('button', { name: 'ログイン' }).click();
   await s.getByRole('link', { name: '入会手続きへ進む' }).click();
   await expect(s.getByText('（税込）').first()).toBeVisible(); // MB-03
+  await s.getByLabel('契約の内容と利用規約に同意します').check();
   await s.getByRole('button', { name: /を支払う/ }).click();
   await s.getByRole('button', { name: 'テストで支払う' }).click();
   await expect(s).toHaveURL(/checkout=done/);

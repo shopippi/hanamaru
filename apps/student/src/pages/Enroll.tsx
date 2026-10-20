@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Button, Loadable, Notice, Skeleton, Warning, fmtYen, useAction, useLoad, useOnline, useToast } from '@hanamaru/ui';
-import { api } from '../api.js';
+import { Button, Checkbox, Loadable, Notice, Skeleton, Warning, fmtYen, useAction, useLoad, useOnline, useToast } from '@hanamaru/ui';
+import { TERMS_URL, api } from '../api.js';
 import { InAppBrowserNotice } from '../notices.js';
 import { useStudent } from '../student-context.js';
 
@@ -11,6 +11,7 @@ interface Options {
   packages: { id: string; name: string; lessonCount: number; admissionFee: number; lessonsPrice: number; total: number }[];
   course: { name: string; lessonsPerMonth: number; amount: number | null } | null;
   methods: { method: 'card' | 'konbini' | 'paypay'; label: string; recommended: boolean }[];
+  terms: { cancelDeadlineHours: number; graceDays: number };
 }
 
 export function Enroll() {
@@ -20,11 +21,13 @@ export function Enroll() {
   const { state, reload } = useLoad(() => api.get<Options>(`/students/${current.id}/enrollment`), [current.id]);
   const [packageId, setPackageId] = useState<string | null>(null);
   const [method, setMethod] = useState<Options['methods'][number]['method']>('card');
+  // 契約の内容と利用規約への同意（お支払いの前の最終確認）
+  const [agreed, setAgreed] = useState(false);
   const cancelled = new URLSearchParams(location.search).get('checkout') === 'cancel';
 
   const pay = useAction(async (pkg: string) => {
     try {
-      const { url } = await api.post<{ url: string }>(`/students/${current.id}/enrollment`, { packageId: pkg, method });
+      const { url } = await api.post<{ url: string }>(`/students/${current.id}/enrollment`, { packageId: pkg, method, agreed });
       // 決済画面（Stripe）へ。支払い後は自動でこのアプリに戻る（PW-06）
       location.assign(url);
     } catch (e) {
@@ -88,8 +91,46 @@ export function Enroll() {
                   </label>
                 ))}
               </fieldset>
+              <section className="stack-sm" aria-labelledby="terms-title">
+                <h2 className="field-label" id="terms-title">
+                  契約の内容
+                </h2>
+                <dl className="summary">
+                  <div>
+                    <dt>期間</dt>
+                    <dd>退会のお申し出まで、毎月続きます</dd>
+                  </div>
+                  <div>
+                    <dt>月謝</dt>
+                    <dd>
+                      {o.course.name}
+                      {o.course.amount !== null ? `・${fmtYen(o.course.amount)}（税込）` : ''}。翌月から毎月1日にお支払いいただきます。日割りはありません
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>退会・休会</dt>
+                    <dd>教室にご連絡ください。お申し出の翌月1日から止まります。お支払い済みの月は月末まで予約でき、返金はありません</dd>
+                  </div>
+                  <div>
+                    <dt>キャンセル</dt>
+                    <dd>レッスンの{o.terms.cancelDeadlineHours}時間前までは回数をお戻しします。それより後のキャンセルと無断欠席は、回数を使います</dd>
+                  </div>
+                  <div>
+                    <dt>未払い</dt>
+                    <dd>毎月1日から{o.terms.graceDays}日たってもお支払いを確認できない場合、その月のご予約は取り消しになります</dd>
+                  </div>
+                </dl>
+                <Checkbox label="契約の内容と利用規約に同意します" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+                {TERMS_URL && (
+                  <p className="small">
+                    <a href={TERMS_URL} target="_blank" rel="noreferrer">
+                      利用規約を読む
+                    </a>
+                  </p>
+                )}
+              </section>
               {selected && (
-                <Button type="submit" block pending={pay.pending} disabled={!online} pendingLabel="お支払い画面へ移動しています…">
+                <Button type="submit" block pending={pay.pending} disabled={!online || !agreed} pendingLabel="お支払い画面へ移動しています…">
                   {fmtYen(selected.total)}（税込）を支払う
                 </Button>
               )}

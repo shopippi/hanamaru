@@ -54,14 +54,10 @@
 
 1. 松田さん名義で申し込む（審査に時間がかかるため最初に）
 2. 「支払い方法」で、カード（Apple Pay・Google Pay を含む）、コンビニ、PayPay を有効にする
-3. Webhook の送信先を `https://student.hanamarumusic.com/api/stripe/webhook` にし、次のイベントを選ぶ。署名シークレットは `STRIPE_WEBHOOK_SECRET` に入れる
-   - `checkout.session.completed`
-   - `checkout.session.async_payment_succeeded`
-   - `checkout.session.async_payment_failed`
-   - `checkout.session.expired`
-   - `invoice.paid`
-   - `invoice.payment_failed`
-4. `STRIPE_SECRET_KEY=... pnpm --filter @hanamaru/api exec tsx scripts/stripe-setup.ts` を実行し、出力を `STRIPE_PORTAL_CONFIGURATION_ID` に入れる（解約の操作を出さないカード管理画面: PY-13）
+3. `STRIPE_SECRET_KEY=... WEBHOOK_URL=https://student.hanamarumusic.com/api/stripe/webhook pnpm --filter @hanamaru/api exec tsx scripts/stripe-setup.ts` を実行する
+   - 解約の操作を出さないカード管理画面（PY-13）と、Webhook の送信先を作る。送信先には、コードが扱う通知の種類（`WEBHOOK_EVENTS`）だけを、SDK と同じ API のバージョンで登録する。ダッシュボードで手で作らない
+   - 出力された値を `STRIPE_PORTAL_CONFIGURATION_ID` と `STRIPE_WEBHOOK_SECRET` に入れる
+4. ダッシュボードの設定（領収書のメール、無料期間の終了のメールを OFF、再試行のあとの扱い、既定のカード管理画面で解約を OFF、明細書の表記、入金のスケジュール）は `docs/stripe-prelaunch.md` の B 章のとおりにする
 5. 「領収書をメールで送る」を ON にする（MB-07）
 6. 検証環境はテストモードのキー（`sk_test_`）で、同じ手順を行う
 

@@ -40,6 +40,8 @@ if (url) {
   const endpoint = await stripe.webhookEndpoints.create({
     url,
     enabled_events: [...WEBHOOK_EVENTS],
+    // 通知の形は API の版で変わる。SDK と同じ版に固定する（invoice.parent など）
+    api_version: Stripe.API_VERSION,
     description: 'はなまる音楽教室 API',
   });
   console.log(`STRIPE_WEBHOOK_SECRET=${endpoint.secret}`);

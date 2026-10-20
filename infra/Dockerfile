@@ -11,6 +11,9 @@ RUN pnpm install --frozen-lockfile
 # 画面（静的ファイル）。Turnstile のサイトキーは公開してよい値
 ARG VITE_TURNSTILE_SITE_KEY=""
 ENV VITE_TURNSTILE_SITE_KEY=$VITE_TURNSTILE_SITE_KEY
+# 利用規約のページ（公開トップに置く）。入会画面からリンクする
+ARG VITE_TERMS_URL=""
+ENV VITE_TERMS_URL=$VITE_TERMS_URL
 RUN pnpm --filter @hanamaru/student --filter @hanamaru/staff --filter @hanamaru/manage build
 RUN pnpm --filter @hanamaru/api deploy --prod --legacy /out/api
 

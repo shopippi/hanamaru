@@ -7,6 +7,8 @@ export const api = createApi('/api', {
   },
 });
 
+/** 公開トップに置く利用規約のページ。入会時の同意（3.11）でリンクする */
+export const TERMS_URL = import.meta.env.VITE_TERMS_URL as string | undefined;
 export const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined;
 
 export interface StudentSummary {

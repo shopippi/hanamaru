@@ -15,6 +15,9 @@ test('PY-03 / PY-05 / PW-06 入会の支払い後、アプリに戻って回数�
   await login(page, STUDENT, 'new@example.test');
   await page.getByRole('link', { name: '入会手続きへ進む' }).click();
   await expect(page.getByText('おすすめ')).toBeVisible();
+  // 契約の内容と利用規約に同意するまで、支払いに進めない（PY-04）
+  await expect(page.getByRole('button', { name: /を支払う/ })).toBeDisabled();
+  await page.getByLabel('契約の内容と利用規約に同意します').check();
   await page.getByRole('button', { name: /を支払う/ }).click();
   // 開発用の決済画面（本番は Stripe の画面）
   await page.getByRole('button', { name: 'テストで支払う' }).click();

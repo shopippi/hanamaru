@@ -47,6 +47,7 @@ services:
       target: web
       args:
         VITE_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+        VITE_TERMS_URL: ${TERMS_URL:-}
     image: hanamaru-web:${RELEASE:-local}
     restart: unless-stopped
     depends_on: [api]
