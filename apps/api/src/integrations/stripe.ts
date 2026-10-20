@@ -72,7 +72,7 @@ export class StripeGateway implements PaymentGateway {
         success_url: req.successUrl,
         cancel_url: req.cancelUrl,
       },
-      { idempotencyKey: `checkout-${req.paymentId}` },
+      { idempotencyKey: req.replaces ? `checkout-${req.paymentId}-${req.replaces}` : `checkout-${req.paymentId}` },
     );
     if (!session.url) throw new Error('checkout session has no url');
     return { id: session.id, url: session.url };

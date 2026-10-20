@@ -14,6 +14,11 @@ export interface CheckoutRequest {
   saveCard: boolean;
   successUrl: string;
   cancelUrl: string;
+  /**
+   * 期限が切れた画面（Checkout は24時間で切れる）の代わりに作り直すとき、その画面の ID。
+   * 同じ画面の作り直しが同時に来ても、Stripe 側で1つにまとまるよう、冪等キーに入れる
+   */
+  replaces?: string;
 }
 
 export interface CheckoutStatus {
