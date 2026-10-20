@@ -246,6 +246,9 @@ function CsvImport({ onDone }: { onDone: () => void }) {
       <p className="small secondary">
         1行目の見出し: <code>ログインメール,保護者名,生徒名,電話番号,生徒のメール,住所</code>
       </p>
+      <p className="small secondary">
+        続けて <code>月額コース,担当講師</code> の列を置くと、コースと担当講師もまとめて入ります（名前で書きます。担当講師が複数なら「、」で区切ります）。同じログインメールの行は、同じ家庭の兄弟として登録します。
+      </p>
       <label className="btn btn-secondary" style={{ alignSelf: 'flex-start' }}>
         <IconUpload size={18} />
         ファイルを選ぶ

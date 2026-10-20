@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { IconCalendar, IconClock, IconInbox, IconLogout, IconUsers, LogoMark, OfflineBanner, useAction, useLoad } from '@hanamaru/ui';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { IconCalendar, IconClock, IconInbox, IconLogout, IconUser, IconUsers, LogoMark, OfflineBanner, useAction, useLoad } from '@hanamaru/ui';
 import { api } from './api.js';
 
 const TABS = [
@@ -37,6 +37,9 @@ export function Layout() {
               はなまる音楽教室<span className="brand-sub">講師</span>
             </span>
           </a>
+          <Link className="btn btn-ghost btn-icon" to="/profile" aria-label="プロフィール" title="プロフィール" aria-current={pathname === '/profile' ? 'page' : undefined}>
+            <IconUser />
+          </Link>
           <button
             type="button"
             className="btn btn-ghost btn-icon"
