@@ -28,6 +28,8 @@ import {
   updateCourse,
 } from '../domain/billing.js';
 import { listLessonTypes, listRooms, saveLessonType, saveRoom } from '../domain/catalog.js';
+import { dashboard } from '../domain/dashboard.js';
+import { bookTrialAsAdmin, listTrialRequests, setTrialStatus } from '../domain/trial.js';
 import { adjustCredits } from '../domain/credits.js';
 import {
   approveStudent,
@@ -261,6 +263,25 @@ export function manageRoutes(deps: AppDeps) {
   priv.post('/charge-items/:id/paid', async (c) => {
     await markChargePaid(ctx, c.get('actor'), c.req.param('id'));
     return c.json({ ok: true });
+  });
+
+  // --- ダッシュボード（DB-01〜04） ---
+  priv.get('/dashboard', async (c) => {
+    const q = query(c, z.object({ month: monthParam.optional() }));
+    return c.json(await dashboard(ctx, c.get('actor'), q));
+  });
+
+  // --- 体験レッスン（TR-01） ---
+  priv.get('/trial-requests', async (c) => c.json(await listTrialRequests(ctx, c.get('actor'))));
+  priv.post('/trial-requests/:id/status', async (c) => {
+    const input = await body(c, z.object({ status: z.enum(['new', 'scheduled', 'done', 'cancelled']) }));
+    await setTrialStatus(ctx, c.get('actor'), c.req.param('id'), input.status);
+    return c.json({ ok: true });
+  });
+  priv.post('/trial-requests/:id/reservations', async (c) => {
+    const input = await body(c, bookInput.omit({ studentId: true }));
+    const r = await bookTrialAsAdmin(ctx, c.get('actor'), c.req.param('id'), input);
+    return c.json({ id: r.id }, 201);
   });
 
   // --- 招待コード（ST-03） ---
