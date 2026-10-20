@@ -20,8 +20,13 @@ export default defineConfig({
   reporter: process.env.CI ? 'list' : 'line',
   use: { locale: 'ja-JP', timezoneId: 'Asia/Tokyo', trace: 'retain-on-failure' },
   projects: [
-    { name: 'iphone', use: { ...devices['iPhone 13'], browserName: 'chromium' } },
-    { name: 'android', use: { ...devices['Pixel 7'] } },
+    // 生徒・講師・管理の基本操作を、iPhone と Android の大きさで
+    { name: 'iphone', testIgnore: /(scenarios|ui-rules|pwa)\.spec/, use: { ...devices['iPhone 13'], browserName: 'chromium' } },
+    { name: 'android', testIgnore: /(scenarios|ui-rules|pwa)\.spec/, use: { ...devices['Pixel 7'] } },
+    // 画面の決まり（UI・MB・PW）。データは変えない
+    { name: 'rules', testMatch: /(ui-rules|pwa)\.spec/, use: { ...devices['iPhone 13'], browserName: 'chromium' } },
+    // 3章の流れを3つの画面をまたいで通す。データと時計を変えるので最後に流す
+    { name: 'scenarios', testMatch: /scenarios\.spec/, dependencies: ['iphone', 'android', 'rules'], use: { ...devices['iPhone 13'], browserName: 'chromium' } },
   ],
   webServer: [
     {

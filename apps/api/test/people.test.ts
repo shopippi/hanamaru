@@ -106,7 +106,7 @@ describe('ST-05 退会・休会', () => {
 });
 
 describe('SR-03〜SR-07 備考とレッスン記録', () => {
-  test('講師には管理用備考が表示されず、担当講師Aが書いた講師用備考を担当講師Bも読める', async () => {
+  test('SR-03 講師には管理用備考が表示されず、担当講師Aが書いた講師用備考を担当講師Bも読める', async () => {
     const { taro, teacherA, teacherB } = await world();
     expect((await teacherA.put(`/students/${taro.student.id}/teacher-note`, { text: '左手が苦手' })).status).toBe(200);
     const seenByB = (await teacherB.get(`/students/${taro.student.id}`)).data;
@@ -114,7 +114,7 @@ describe('SR-03〜SR-07 備考とレッスン記録', () => {
     expect(JSON.stringify(seenByB)).not.toContain('祖母');
   });
 
-  test('講師は担当レッスンからレッスン記録を書け、生徒ごとに日付順で一覧できる', async () => {
+  test('SR-04 講師は担当レッスンからレッスン記録を書け、生徒ごとに日付順で一覧できる', async () => {
     const { f, taro, teacherA, teacherB } = await world();
     const r1 = await bookAsStudent(f.ctx, taro.actor, {
       studentId: taro.student.id,
@@ -138,7 +138,7 @@ describe('SR-03〜SR-07 備考とレッスン記録', () => {
     expect(records.map((r: any) => r.content)).toEqual(['ハノン1番', 'ブルグミュラー2番']);
   });
 
-  test('生徒の画面とAPIの応答にレッスン記録・備考・住所が含まれない', async () => {
+  test('SR-05 生徒の画面とAPIの応答にレッスン記録・備考・住所が含まれない', async () => {
     const { f, taro, studentTaro, teacherA, admin } = await world();
     const r = await bookAsStudent(f.ctx, taro.actor, {
       studentId: taro.student.id,

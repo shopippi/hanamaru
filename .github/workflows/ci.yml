@@ -21,10 +21,44 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
-  e2e:
-    # 画面の通しテスト（iPhone・Android の大きさ）
+  test-postgres:
+    # 同じ受入テストを本物の PostgreSQL で流す（同時予約のロックなど、メモリ上の DB では確かめにくいもの）
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_USER: hanamaru
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: hanamaru
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U hanamaru" --health-interval 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @hanamaru/api test
+        env:
+          TEST_DATABASE_URL: postgres://hanamaru:ci@127.0.0.1:5432/postgres
+
+  e2e:
+    # 画面の通しテスト（iPhone・Android の大きさ、画面の決まり、3章の流れ）。本物の PostgreSQL で動かす
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_USER: hanamaru
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: hanamaru
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U hanamaru" --health-interval 5s --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -37,6 +71,7 @@ jobs:
       - run: pnpm e2e
         env:
           CI: 'true'
+          DATABASE_URL: postgres://hanamaru:ci@127.0.0.1:5432/hanamaru
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

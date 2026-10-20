@@ -4,7 +4,8 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { Hono } from 'hono';
 import * as schema from './db/schema.js';
-import { MIGRATIONS_DIR, type Db } from './db/client.js';
+import pg from 'pg';
+import { connect, MIGRATIONS_DIR, type Db } from './db/client.js';
 import type { Ctx } from './domain/context.js';
 import { ConsoleEmailTransport, EmailChannel, NotificationService } from './domain/notify.js';
 import type { CheckoutRequest, PaymentEvent, PaymentGateway } from './domain/payment-gateway.js';
@@ -16,7 +17,10 @@ import { hashPassword, totpCode } from './lib/crypto.js';
 import { monthOf } from './lib/time.js';
 
 // 開発・画面確認用のサーバー。本番では使わない。
-// - DB はメモリ上の PostgreSQL（PGlite）。起動のたびにダミーデータを入れ直す
+// - DB はメモリ上の PostgreSQL（PGlite）。DATABASE_URL を指定すると、手元の PostgreSQL を空にして使う
+//   （消してよい DB だけ。localhost 以外は DEV_ALLOW_RESET=1 がないと拒否する）。起動のたびにダミーデータを入れ直す
+// - 時計を進められる（POST /dev/clock）。月末・月初の処理を手元で確かめるため
+// - 送ったメールを GET /dev/mails で見られる
 // - Stripe は使わず、決済画面の代わりに「テストで支払う」ボタンの画面を出す
 // - メールは標準出力に書く
 //   pnpm --filter @hanamaru/api dev:local
@@ -109,15 +113,39 @@ async function seed(db: Db, ctx: Ctx) {
   await db.insert(schema.students).values({ accountId: solo.id, name: '佐藤 一郎', status: 'enrolling', courseId: course.id });
 }
 
-const client = new PGlite();
-const db = drizzle(client, { schema }) as unknown as Db;
-await migrate(drizzle(client, { schema }), { migrationsFolder: MIGRATIONS_DIR });
+async function openDb(): Promise<Db> {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    const client = new PGlite();
+    await migrate(drizzle(client, { schema }), { migrationsFolder: MIGRATIONS_DIR });
+    return drizzle(client, { schema }) as unknown as Db;
+  }
+  if (!/@(localhost|127\.0\.0\.1)[:/]/.test(url) && process.env.DEV_ALLOW_RESET !== '1') {
+    throw new Error('開発用サーバーは DB を空にします。localhost 以外の DB には DEV_ALLOW_RESET=1 が必要です');
+  }
+  const pool = new pg.Pool({ connectionString: url });
+  await pool.query('drop schema if exists public cascade; drop schema if exists drizzle cascade; create schema public;');
+  await pool.end();
+  return (await connect(url)).db;
+}
+
+const db = await openDb();
+let clockOffsetMs = 0;
+const mails: { to: string; subject: string; text: string; at: string }[] = [];
+const console_ = new ConsoleEmailTransport();
 
 const gateway = new DevGateway();
 const ctx: Ctx = {
   db,
-  now: () => new Date(),
-  notifier: new NotificationService(db, [new EmailChannel(new ConsoleEmailTransport())]),
+  now: () => new Date(Date.now() + clockOffsetMs),
+  notifier: new NotificationService(db, [
+    new EmailChannel({
+      send: async (m) => {
+        mails.push({ ...m, at: new Date(Date.now() + clockOffsetMs).toISOString() });
+        await console_.send(m);
+      },
+    }),
+  ]),
   payments: gateway,
   urls: { student: `http://${HOST}:5173`, staff: `http://${HOST}:5174`, manage: `http://${HOST}:5175` },
 };
@@ -148,8 +176,16 @@ dev.get('/portal', (c) =>
   c.html(`<!doctype html><meta name="viewport" content="width=device-width"><body style="font-family:sans-serif;max-width:480px;margin:40px auto;padding:0 16px">
   <h1>カード管理（開発用）</h1><p>本番では Stripe のカード管理画面が開きます。解約の操作は出ません。</p><p><a href="${c.req.query('return')}">戻る</a></p></body>`),
 );
-dev.get('/totp', (c) => c.text(totpCode(ADMIN_TOTP_SECRET, new Date())));
+dev.get('/totp', (c) => c.text(totpCode(ADMIN_TOTP_SECRET, ctx.now())));
 dev.post('/jobs', async (c) => c.json(await runJobs(ctx)));
+// 時計を進める（月末・月初の処理の確認用）。{ "at": "2026-11-01T00:10:00+09:00" }。null で元に戻す
+dev.post('/clock', async (c) => {
+  const { at } = (await c.req.json()) as { at: string | null };
+  clockOffsetMs = at ? new Date(at).getTime() - Date.now() : 0;
+  return c.json({ now: ctx.now() });
+});
+dev.get('/clock', (c) => c.json({ now: ctx.now() }));
+dev.get('/mails', (c) => c.json(mails));
 app.route('/dev', dev);
 
 serve({ fetch: app.fetch, port: PORT }, () => {

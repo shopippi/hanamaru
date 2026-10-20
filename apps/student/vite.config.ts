@@ -30,5 +30,11 @@ export default defineConfig({
       '/api': { target: 'http://localhost:3000', rewrite: (p) => p.replace(/^\/api/, '/api/student') },
     },
   },
-  preview: { port: 5173 },
+  // 本番の作り（Service Worker を含む）を手元で確かめるとき用（e2e の PW-05）
+  preview: {
+    port: 4173,
+    proxy: {
+      '/api': { target: 'http://127.0.0.1:3000', rewrite: (p) => p.replace(/^\/api/, '/api/student') },
+    },
+  },
 });

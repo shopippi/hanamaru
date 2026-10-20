@@ -5,7 +5,7 @@ import { PASSWORD, setupHttp } from './http.js';
 
 const linkToken = (text: string) => /token=([\w-]+)/.exec(text)![1]!;
 
-describe('AU-01 ロールごとの画面', () => {
+describe('AU-01 / URL-05 ロールごとの画面', () => {
   test('各ロールは自分のポータルにだけログインでき、他のポータルは拒否される', async () => {
     const f = await setupHttp();
     const { account } = await f.mkStudent('太郎', { credits: 4 });
