@@ -1,0 +1,1 @@
+ALTER TABLE "lesson_types" ADD COLUMN "online" boolean DEFAULT false NOT NULL;

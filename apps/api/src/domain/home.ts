@@ -5,7 +5,7 @@ import { studentForActor } from './access.js';
 import { studentBlocker } from './booking.js';
 import type { Actor, Ctx } from './context.js';
 import { needsCard, unpaidCardMonth, unpaidLinkMonth } from './billing.js';
-import { availableCredits, hasAutopay } from './credits.js';
+import { availableCredits, carriedRemaining, hasAutopay } from './credits.js';
 import { getSettings } from './settings.js';
 
 // 生徒のトップ（MB-01）: 今月の残り回数、次の予約、お支払い状況を1画面で
@@ -35,6 +35,7 @@ export async function studentHome(ctx: Ctx, actor: Actor, studentId: string) {
       status: reservations.status,
       teacherName: teachers.name,
       lessonTypeName: lessonTypes.name,
+      online: lessonTypes.online,
     })
     .from(reservations)
     .innerJoin(teachers, eq(teachers.id, reservations.teacherId))
@@ -81,6 +82,8 @@ export async function studentHome(ctx: Ctx, actor: Actor, studentId: string) {
     student: { id: s.id, name: s.name, status: s.status, scheduledStatus: s.scheduledStatus, scheduledStatusAt: s.scheduledStatusAt },
     month,
     remaining: Math.max(0, await availableCredits(ctx.db, s, month, now)),
+    /** 残り回数のうち、先月から繰り越した分（今月末まで。PY-07） */
+    carried: await carriedRemaining(ctx.db, s.id, month),
     nextMonth: { month: addMonths(month, 1), remaining: Math.max(0, await availableCredits(ctx.db, s, addMonths(month, 1), now)) },
     nextReservation: next ?? null,
     payment,

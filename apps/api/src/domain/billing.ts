@@ -24,7 +24,7 @@ import { SYSTEM, type Actor, type Ctx } from './context.js';
 import { addLedger } from './credits.js';
 import { conflict, invalid, notFound, ruleViolation } from './errors.js';
 import type { InvoiceStatus, OnlineMethod, PaymentEvent } from './payment-gateway.js';
-import { enabledBillingMethods, getSettings } from './settings.js';
+import { cancelDeadlineLabel, enabledBillingMethods, getSettings } from './settings.js';
 import type { Message, Recipient } from './notify.js';
 import type { NotificationType } from './settings.js';
 
@@ -265,7 +265,12 @@ export async function enrollmentOptions(ctx: Ctx, actor: Actor, studentId: strin
   return {
     status: s.status,
     /** 入会画面で同意を取る契約の内容に使う値（3.8 の設定値） */
-    terms: { cancelDeadlineHours: settings.cancelDeadlineHours, graceDays: settings.graceDays },
+    terms: {
+      cancelDeadlineHours: settings.cancelDeadlineHours,
+      cancelDeadline: cancelDeadlineLabel(settings),
+      graceDays: settings.graceDays,
+      carryover: settings.carryoverEnabled && settings.carryoverMax > 0,
+    },
     packages: packages.map((p) => ({
       id: p.id,
       name: p.name,

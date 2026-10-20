@@ -5,10 +5,14 @@ import type { Message } from './notify.js';
 
 const SIGNATURE = '\n\n--\nはなまる音楽教室';
 
-const lesson = (r: { studentName: string; teacherName: string; startsAt: Date }) =>
-  `生徒: ${r.studentName}\n日時: ${formatJa(r.startsAt)}\n講師: ${r.teacherName}`;
+type R = { studentName: string; teacherName: string; startsAt: Date; lessonTypeName?: string; online?: boolean };
 
-type R = { studentName: string; teacherName: string; startsAt: Date };
+const lesson = (r: R) =>
+  `生徒: ${r.studentName}\n日時: ${formatJa(r.startsAt)}\n講師: ${r.teacherName}` +
+  (r.lessonTypeName ? `\nレッスン: ${r.lessonTypeName}${r.online ? '（オンライン）' : ''}` : '');
+
+/** オンラインのレッスン（RS-09）は、参加用の URL を講師から知らせる */
+const onlineNote = (r: R) => (r.online ? '\n\nオンラインのレッスンです。参加用のURLは講師からご連絡します。' : '');
 
 export const messages = {
   reservationConfirmed: (r: R, pending: boolean): Message => ({
@@ -18,15 +22,16 @@ export const messages = {
         ? '次のレッスンを仮予約として受け付けました。教室が確認すると確定します。\n\n'
         : '次のレッスンの予約が確定しました。\n\n') +
       lesson(r) +
+      onlineNote(r) +
       SIGNATURE,
   }),
   reservationApproved: (r: R): Message => ({
     subject: '【予約確定】レッスンの予約が確定しました',
-    body: '仮予約していた次のレッスンが確定しました。\n\n' + lesson(r) + SIGNATURE,
+    body: '仮予約していた次のレッスンが確定しました。\n\n' + lesson(r) + onlineNote(r) + SIGNATURE,
   }),
   reservationChanged: (r: R, from: Date): Message => ({
     subject: '【予約変更】レッスンの日時を変更しました',
-    body: `レッスンの日時を変更しました。\n\n変更前: ${formatJa(from)}\n` + lesson(r) + SIGNATURE,
+    body: `レッスンの日時を変更しました。\n\n変更前: ${formatJa(from)}\n` + lesson(r) + onlineNote(r) + SIGNATURE,
   }),
   reservationCancelled: (r: R, reason: string, refunded: boolean): Message => ({
     subject: '【予約キャンセル】レッスンの予約を取り消しました',
@@ -46,7 +51,7 @@ export const messages = {
   }),
   reservationReminder: (r: R): Message => ({
     subject: '【明日のレッスン】ご予約のお知らせ',
-    body: '明日のレッスンのお知らせです。\n\n' + lesson(r) + SIGNATURE,
+    body: '明日のレッスンのお知らせです。\n\n' + lesson(r) + onlineNote(r) + SIGNATURE,
   }),
 };
 

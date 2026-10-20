@@ -175,6 +175,7 @@ export function manageRoutes(deps: AppDeps) {
         studentId: reservations.studentId,
         studentName: students.name,
         lessonTypeName: lessonTypes.name,
+        online: lessonTypes.online,
         trialRequestId: reservations.trialRequestId,
       })
       .from(reservations)
