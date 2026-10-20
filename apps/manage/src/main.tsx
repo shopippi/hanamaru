@@ -11,6 +11,7 @@ import { Login } from './pages/Login.js';
 import { Audit, Closures, SettingsPage, Trials } from './pages/Misc.js';
 import { Charges, Payments, Pricing } from './pages/Money.js';
 import { StudentDetail } from './pages/StudentDetail.js';
+import { SchoolHours } from './pages/SchoolHours.js';
 import { Students } from './pages/Students.js';
 import { TeacherAvailability, Teachers } from './pages/Teachers.js';
 
@@ -35,6 +36,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/charges" element={<Charges />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/trials" element={<Trials />} />
+            <Route path="/school-hours" element={<SchoolHours />} />
             <Route path="/closures" element={<Closures />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/audit" element={<Audit />} />

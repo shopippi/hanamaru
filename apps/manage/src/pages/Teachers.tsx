@@ -21,6 +21,8 @@ import {
   type AvChange,
   type AvException,
   type AvResult,
+  type AvCalendar,
+  type AvDayInput,
   type AvRule,
 } from '@hanamaru/ui';
 import { api, type LessonType, type Teacher } from '../api.js';
@@ -167,6 +169,8 @@ export function TeacherAvailability() {
                   confirm,
                 })
               }
+              loadCalendar={(month) => api.get<AvCalendar>(`/teachers/${id}/availability/calendar?month=${month}`)}
+              saveDay={(input: AvDayInput, confirm: boolean) => api.put<AvResult>(`/teachers/${id}/availability/days`, { ...input, confirm })}
             />
           </div>
         </div>

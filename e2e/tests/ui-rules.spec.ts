@@ -112,7 +112,7 @@ test('UI-01 / UI-03 / UI-04 / UI-05 / UI-19 講師の画面', async ({ page }) =
 
 test('UI-01 / UI-03 / UI-04 / UI-05 / UI-19 管理の画面', async ({ page }) => {
   await loginAdmin(page);
-  for (const path of ['/', '/calendar', '/students', '/teachers', '/payments', '/charges', '/trials', '/pricing', '/closures', '/settings', '/audit']) {
+  for (const path of ['/', '/calendar', '/students', '/teachers', '/payments', '/charges', '/trials', '/pricing', '/school-hours', '/closures', '/settings', '/audit']) {
     await page.goto(`${MANAGE}${path}`);
     await page.locator('main h1').first().waitFor();
     await page.waitForTimeout(500);

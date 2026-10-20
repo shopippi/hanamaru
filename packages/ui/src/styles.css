@@ -1000,6 +1000,160 @@ button.list-row.disclosure {
   cursor: pointer;
 }
 
+/* 月のカレンダー（AV-06、AV-07） */
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+}
+.cal-title {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.cal-weekday {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding-bottom: 2px;
+}
+.cal-day {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  min-height: 64px;
+  padding: 6px 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+.cal-day:hover:not(:disabled) {
+  border-color: var(--gray-600);
+}
+.cal-day-num {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.cal-day.today .cal-day-num {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+.cal-day-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.cal-line {
+  display: block;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+.cal-line.strong {
+  font-weight: 700;
+}
+.cal-full {
+  display: none;
+}
+@media (min-width: 720px) {
+  .cal-full {
+    display: inline;
+  }
+  .cal-short {
+    display: none;
+  }
+}
+@media (max-width: 719px) {
+  .cal-day {
+    padding: 5px 4px 6px;
+  }
+  .cal-line {
+    font-size: 10px;
+  }
+}
+.cal-day.muted {
+  background: var(--gray-50);
+  color: var(--text-muted);
+}
+.cal-day:disabled {
+  cursor: default;
+  background: var(--gray-50);
+  color: var(--text-muted);
+  border-color: var(--gray-100);
+}
+.cal-day[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--gray-0);
+}
+@media (min-width: 720px) {
+  .cal-grid {
+    gap: 6px;
+  }
+  .cal-day {
+    min-height: 84px;
+    padding: 8px;
+  }
+  .cal-line {
+    font-size: 12px;
+  }
+}
+/* カレンダーと、選んだ日の設定を横に並べる（パソコン） */
+.cal-layout {
+  display: grid;
+  gap: var(--s6);
+  align-items: start;
+}
+@media (min-width: 1100px) {
+  .cal-layout {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+  .cal-layout > .panel {
+    position: sticky;
+    top: var(--s6);
+  }
+}
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s4);
+  margin-top: var(--s3);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.window-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+.window-row .input,
+.window-row .select {
+  width: auto;
+}
+
 /* 進み具合の線 */
 .meter {
   height: 6px;
