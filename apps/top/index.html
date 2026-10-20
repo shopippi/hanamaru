@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#ffffff" />
+    <title>はなまる音楽教室</title>
+    <link rel="icon" href="/favicon.png" />
+    <style>
+      /* 公開トップページ（4.4）。当面は教室名とログインの2つのボタンだけ。後で作る HP に置き換える */
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fff;
+        color: #111;
+        font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic UI', 'Meiryo', sans-serif;
+      }
+      main {
+        width: 100%;
+        max-width: 400px;
+        padding: 24px 16px;
+        text-align: center;
+      }
+      img {
+        width: 96px;
+        height: 96px;
+      }
+      h1 {
+        font-size: 24px;
+        margin: 16px 0 32px;
+      }
+      a {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 52px;
+        margin-top: 12px;
+        border: 2px solid #111;
+        border-radius: 8px;
+        font-weight: 700;
+        text-decoration: none;
+        color: #111;
+      }
+      a.primary {
+        background: #111;
+        color: #fff;
+      }
+      a:focus-visible {
+        outline: 3px solid #111;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/favicon.png" alt="" />
+      <h1>はなまる音楽教室</h1>
+      <!-- URL-01 -->
+      <a class="primary" href="https://student.hanamarumusic.com/">生徒ログイン</a>
+      <a href="https://staff.hanamarumusic.com/login">講師ログイン</a>
+    </main>
+  </body>
+</html>

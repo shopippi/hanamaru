@@ -1,0 +1,5 @@
+# Cloudflare Pages の転送（URL-03）。/student と /staff を開いた人をそれぞれのログイン画面へ送る
+/student https://student.hanamarumusic.com/login 301
+/student/* https://student.hanamarumusic.com/login 301
+/staff https://staff.hanamarumusic.com/login 301
+/staff/* https://staff.hanamarumusic.com/login 301

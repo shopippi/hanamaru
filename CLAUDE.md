@@ -43,6 +43,8 @@
 - `apps/staff/` 講師の画面、`apps/manage/` 管理者の画面
 - `packages/ui/` 3つの画面で共通の部品・スタイル・API 呼び出し（UI-06）。UI-00〜19 の決まりはここで守る
 - `e2e/` 画面の通しテスト（Playwright）
+- `apps/top/` 公開トップページ（Cloudflare Pages）
+- `infra/` 本番・検証環境（Docker Compose、Caddy、Cloudflare Tunnel、バックアップ、`deploy.sh`・`restore.sh`）。手順は `docs/operations.md`
 - `docs/` 要件定義書、検証報告、設計の決定（ADR）
 
 ## よく使うコマンド
