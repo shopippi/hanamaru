@@ -274,7 +274,7 @@ describe('PY-12 / PY-13 / ST-05 兄弟・解約', () => {
     expect(subs(f)[1]!.startAt).toEqual(jst('2026-12-01'));
   });
 
-  test('生徒の画面には解約の操作がなく、カードの変更は Stripe の画面へのリンクで行う', async () => {
+  test('PY-13 / MB-04 生徒の画面には解約の操作がなく、カードの変更は Stripe の画面へのリンクで行う', async () => {
     const { f, enrolling, pkg, paidEvent } = await billingWorld();
     const { student, actor, account } = await enrolling('太郎');
     await startEnrollment(f.ctx, actor, student.id, { packageId: pkg.id, method: 'card' });

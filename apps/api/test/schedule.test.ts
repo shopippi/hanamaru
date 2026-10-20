@@ -92,7 +92,7 @@ describe('AV-02 / AV-03 予約が入っている時間帯の変更', () => {
     expect(again.applied).toBe(true);
   });
 
-  test('確認して変更すると講師都合のキャンセルになり、回数が戻り、生徒と管理者にメールが届く', async () => {
+  test('AV-03 / PY-08 確認して変更すると講師都合のキャンセルになり、回数が戻り、生徒と管理者にメールが届く', async () => {
     const { f, student, r } = await withBooking();
     f.mail.sent.length = 0;
     const res = await changeAvailability(
@@ -116,7 +116,7 @@ describe('AV-02 / AV-03 予約が入っている時間帯の変更', () => {
 });
 
 describe('AV-04 休講日', () => {
-  test('休講日の枠は表示されず、既存の予約は取り消されて回数が戻る', async () => {
+  test('AV-04 / PY-08 休講日の枠は表示されず、既存の予約は取り消されて回数が戻る', async () => {
     const f = await setup();
     const { student, actor } = await f.mkStudent('太郎', { credits: 4 });
     await bookAsStudent(f.ctx, actor, {

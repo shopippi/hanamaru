@@ -5,6 +5,7 @@
 - 要件定義書: [docs/requirements.md](docs/requirements.md)
 - 設計の決定: [docs/decisions/](docs/decisions/)
 - フェーズ0 検証報告: [docs/phase0-report.md](docs/phase0-report.md)
+- 手元での確認報告: [docs/verification.md](docs/verification.md)
 - 運用手順書: [docs/operations.md](docs/operations.md)
 - 開発のルール: [CLAUDE.md](CLAUDE.md)
 
