@@ -30,7 +30,7 @@ import {
   useLoad,
   useToast,
 } from '@hanamaru/ui';
-import { api, type Course, type Package, type StudentStatus, type Teacher } from '../api.js';
+import { api, useBillingOptions, type Course, type Package, type StudentStatus, type Teacher } from '../api.js';
 
 // 生徒の詳細（4.1）: 基本情報、状態、管理用備考、講師用備考、レッスン記録、回数の履歴、入金記録
 
@@ -274,6 +274,7 @@ function InfoSection({ d, courses, onSaved }: { d: Detail; courses: Course[]; on
     courseId: d.courseId ?? '',
     billingMethod: d.billingMethod,
   });
+  const billingOptions = useBillingOptions(d.billingMethod);
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const save = useAction(async () => {
     try {
@@ -312,9 +313,9 @@ function InfoSection({ d, courses, onSaved }: { d: Detail; courses: Course[]; on
           ))}
         </Select>
         <Select label="支払い方法" value={form.billingMethod} onChange={set('billingMethod')}>
-          {Object.entries(METHOD_LABEL).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
+          {billingOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
             </option>
           ))}
         </Select>
