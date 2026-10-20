@@ -6,27 +6,17 @@ on:
     branches: [main]
 
 jobs:
-  phase0:
-    # フェーズ0の検証を LibreBooking を実際に起動して流す（7.2 プルリクエストごとの自動テスト）
+  test:
+    # 受入条件の自動テスト（7.2: テストが通らないものは取り込まない）
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: shellcheck
-        run: shellcheck -S warning phase0/verify.sh infra/librebooking/dbinit.sh
-      - name: start librebooking
-        run: |
-          cat > .env <<ENV
-          LB_DB_ROOT_PASSWORD=ci-root-${{ github.run_id }}
-          LB_DATABASE_PASSWORD=ci-lb-${{ github.run_id }}
-          LB_INSTALL_PASSWORD=ci-install-${{ github.run_id }}
-          LB_PORT=8080
-          LB_LOAD_SAMPLE_DATA=true
-          LB_API_REGISTRATION_ALLOW_SELF=true
-          ENV
-          docker compose -f infra/librebooking/compose.yml --env-file .env up -d --wait app
-      - name: verify
-        run: bash phase0/verify.sh | tee verify.txt
-      - name: logs on failure
-        if: failure()
-        run: docker compose -f infra/librebooking/compose.yml --env-file .env logs
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test

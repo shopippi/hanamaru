@@ -1,5 +1,7 @@
 # フェーズ0 検証報告（要件定義書 7.1）
 
+> この結果を受けて、予約の中核は自前で作ることにした（[ADR 0001](decisions/0001-build-booking-core.md)）。検証に使った `infra/librebooking/` と `phase0/` はその際に削除した（PR #1 の履歴に残っている）。
+
 2026年10月20日 · 対象: LibreBooking 3.5.1（公式Dockerイメージ `librebooking/librebooking:7.1.0-3.5.1`）＋ MariaDB 11.4
 
 ## 結論
