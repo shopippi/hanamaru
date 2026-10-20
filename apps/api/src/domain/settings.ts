@@ -5,7 +5,6 @@ import { settings as settingsTable } from '../db/schema.js';
 
 // 管理者が画面から変えられる設定（3.8）。数値をコードに直接書かず、ここの既定値を初期値にする（2章の1）
 
-const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 
 export const NOTIFICATION_TYPES = [
   'reservation_confirmed',
@@ -23,8 +22,6 @@ export const NOTIFICATION_TYPES = [
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 export const settingsSchema = z.object({
-  /** 営業日・時間。曜日（0=日曜）ごと。null は休業日 */
-  businessHours: z.array(z.object({ open: time, close: time }).nullable()).length(7),
   /** 生徒に予約を公開する期間（RS-03） */
   publishWeeks: z.number().int().min(1).max(26),
   /** 締切（何時間前まで）。予約・変更・キャンセルごと（RS-04） */
@@ -68,15 +65,6 @@ export const settingsPatchSchema = settingsSchema
   .extend({ notifications: z.partialRecord(z.enum(NOTIFICATION_TYPES), z.boolean()).optional() });
 
 export const DEFAULT_SETTINGS: Settings = {
-  businessHours: [
-    null,
-    { open: '10:00', close: '21:00' },
-    { open: '10:00', close: '21:00' },
-    { open: '10:00', close: '21:00' },
-    { open: '10:00', close: '21:00' },
-    { open: '10:00', close: '21:00' },
-    { open: '10:00', close: '18:00' },
-  ],
   publishWeeks: 4,
   reserveDeadlineHours: 24,
   changeDeadlineHours: 24,

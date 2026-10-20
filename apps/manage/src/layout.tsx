@@ -6,6 +6,7 @@ import {
   IconCalendar,
   IconChart,
   IconClose,
+  IconDoor,
   IconHistory,
   IconLogout,
   IconMenu,
@@ -49,6 +50,7 @@ const NAV: { title: string; items: Item[] }[] = [
   {
     title: '教室',
     items: [
+      { to: '/school-hours', label: '受付日', icon: IconDoor },
       { to: '/closures', label: '休講', icon: IconBan },
       { to: '/settings', label: '設定', icon: IconSettings },
       { to: '/audit', label: '操作記録', icon: IconHistory },

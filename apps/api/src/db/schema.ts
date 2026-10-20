@@ -192,9 +192,12 @@ export const availabilityRules = pgTable(
   (t) => [index('availability_rules_teacher_idx').on(t.teacherId)],
 );
 
-export const exceptionKindEnum = pgEnum('availability_exception_kind', ['block', 'extra']);
+export const exceptionKindEnum = pgEnum('availability_exception_kind', ['block', 'extra', 'override']);
 
-/** 日付ごとの例外（AV-01）。block=その時間は空いていない、extra=その日だけ空いている */
+/**
+ * 日付ごとの例外（AV-01、AV-07）。block=その時間は空いていない、extra=その日だけ空いている、
+ * override=その日は毎週の型を使わない（その日の空き時間は extra だけ。extra がなければ終日空いていない）
+ */
 export const availabilityExceptions = pgTable(
   'availability_exceptions',
   {
@@ -210,6 +213,23 @@ export const availabilityExceptions = pgTable(
     forTrial: boolean('for_trial').notNull().default(false),
   },
   (t) => [index('availability_exceptions_teacher_date_idx').on(t.teacherId, t.date)],
+);
+
+/**
+ * 教室の受付時間（AV-06）。不定休のため日付ごとに持つ。1日に複数の時間帯を持てる。
+ * 行がない日は予約を受け付けない
+ */
+export const schoolHours = pgTable(
+  'school_hours',
+  {
+    id: id(),
+    date: text('date').notNull(),
+    startTime: text('start_time').notNull(),
+    endTime: text('end_time').notNull(),
+    updatedBy: uuid('updated_by').references(() => accounts.id),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('school_hours_date_start_idx').on(t.date, t.startTime)],
 );
 
 /** 休講日・臨時休講（AV-04）。時刻が null なら終日 */

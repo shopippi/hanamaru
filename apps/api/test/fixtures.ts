@@ -6,13 +6,14 @@ import {
   courses,
   creditLedger,
   lessonTypes,
+  schoolHours,
   students,
   studentTeachers,
   teachers,
 } from '../src/db/schema.js';
 import type { Actor, Ctx } from '../src/domain/context.js';
 import { EmailChannel, MemoryEmailTransport, NotificationService } from '../src/domain/notify.js';
-import { jst, monthOf, type Month } from '../src/lib/time.js';
+import { addDays, jst, monthOf, weekdayOf, type DateStr, type Month } from '../src/lib/time.js';
 import { testDb } from './db.js';
 import { FakeGateway } from './fake-gateway.js';
 
@@ -45,6 +46,16 @@ export async function setup(now = jst('2026-10-20', '10:00')) {
     accountId: a.id,
     role: a.role,
   });
+
+  // 教室の受付時間（AV-06）。テストでは、以前の既定の営業時間（月〜金 10:00〜21:00、土 10:00〜18:00、日曜休み）を
+  // 2026年8月〜2027年12月の毎日に入れておく。受付時間を確かめるテストは、必要な日を消したり変えたりする
+  const hours: { date: DateStr; startTime: string; endTime: string }[] = [];
+  for (let d: DateStr = '2026-08-01'; d < '2028-01-01'; d = addDays(d, 1)) {
+    const wd = weekdayOf(d);
+    if (wd === 0) continue;
+    hours.push({ date: d, startTime: '10:00', endTime: wd === 6 ? '18:00' : '21:00' });
+  }
+  await db.insert(schoolHours).values(hours);
 
   const adminAccount = await mkAccount('admin', 'matsuda@example.test', '松田');
   const admin = actorOf(adminAccount);

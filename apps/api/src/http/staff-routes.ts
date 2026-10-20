@@ -11,9 +11,9 @@ import {
   studentDetailForTeacher,
   studentsOfTeacher,
 } from '../domain/people.js';
-import { availabilityChange, availabilityOf, changeAvailability } from '../domain/schedule.js';
+import { availabilityChange, availabilityOf, changeAvailability, setTeacherDay, teacherCalendar } from '../domain/schedule.js';
 import { jst } from '../lib/time.js';
-import { body, dateParam, query, requireAuth, type AppDeps, type Env } from './app.js';
+import { body, dateParam, monthParam, query, rawBody, requireAuth, type AppDeps, type Env } from './app.js';
 import { authRoutes } from './auth-routes.js';
 
 // 講師の画面の API（staff.hanamarumusic.com/api）
@@ -24,7 +24,7 @@ export function staffRoutes(deps: AppDeps) {
 
   app.route('/auth', authRoutes(deps, 'staff'));
   const auth = requireAuth(deps, 'staff');
-  for (const p of ['/lessons', '/lessons/*', '/students', '/students/*', '/availability', '/lesson-types', '/rooms']) {
+  for (const p of ['/lessons', '/lessons/*', '/students', '/students/*', '/availability', '/availability/*', '/lesson-types', '/rooms']) {
     app.use(p, auth);
   }
 
@@ -65,6 +65,17 @@ export function staffRoutes(deps: AppDeps) {
     const t = await myTeacher(c);
     const input = await body(c, z.object({ change: availabilityChange, confirm: z.boolean().default(false) }));
     return c.json(await changeAvailability(ctx, c.get('actor'), t.id, input.change, input.confirm));
+  });
+  // 自分の空き時間のカレンダーと、日ごとの設定（AV-07）
+  app.get('/availability/calendar', async (c) => {
+    const t = await myTeacher(c);
+    const q = query(c, z.object({ month: monthParam }));
+    return c.json(await teacherCalendar(ctx, c.get('actor'), t.id, q.month));
+  });
+  app.put('/availability/days', async (c) => {
+    const t = await myTeacher(c);
+    const input = (await rawBody(c)) as { confirm?: unknown };
+    return c.json(await setTeacherDay(ctx, c.get('actor'), t.id, input, input?.confirm === true));
   });
   app.get('/lesson-types', async (c) => c.json(await listLessonTypes(ctx)));
   app.get('/rooms', async (c) => c.json(await listRooms(ctx)));

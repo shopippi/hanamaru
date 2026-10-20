@@ -18,7 +18,10 @@ test('SR-06 講師には住所が表示されず、講師用備考を書ける',
 test('AV-01 講師の空き時間の画面', async ({ page }) => {
   await login(page, STAFF, 'teacher@example.test');
   await page.getByRole('navigation').getByRole('link', { name: '空き時間', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '曜日ごとの空き時間' })).toBeVisible();
+  // カレンダーで日ごとに決め（AV-07）、毎週の型も持てる
+  await expect(page.locator('.cal-title')).toBeVisible();
+  await page.getByRole('button', { name: '毎週の型' }).click();
+  await expect(page.getByRole('heading', { name: /曜日ごとの空き時間/ })).toBeVisible();
   await expect(page.getByRole('button', { name: '保存する' })).toBeDisabled();
 });
 

@@ -47,7 +47,18 @@ import {
   updateStudent,
 } from '../domain/people.js';
 import { createInviteCode, deactivateInviteCode, listInviteCodes } from '../domain/registration.js';
-import { availabilityChange, availabilityOf, changeAvailability, createClosure, deleteClosure, teacherMonthStats } from '../domain/schedule.js';
+import {
+  availabilityChange,
+  availabilityOf,
+  changeAvailability,
+  createClosure,
+  deleteClosure,
+  schoolCalendar,
+  setSchoolHours,
+  setTeacherDay,
+  teacherCalendar,
+  teacherMonthStats,
+} from '../domain/schedule.js';
 import { getSettings, settingsPatchSchema, updateSettings } from '../domain/settings.js';
 import { audit } from '../domain/audit.js';
 import { jst, monthOf } from '../lib/time.js';
@@ -121,6 +132,25 @@ export function manageRoutes(deps: AppDeps) {
   priv.post('/teachers/:id/availability', async (c) => {
     const input = await body(c, z.object({ change: availabilityChange, confirm: z.boolean().default(false) }));
     return c.json(await changeAvailability(ctx, c.get('actor'), c.req.param('id'), input.change, input.confirm));
+  });
+
+  priv.get('/teachers/:id/availability/calendar', async (c) => {
+    const q = query(c, z.object({ month: monthParam }));
+    return c.json(await teacherCalendar(ctx, c.get('actor'), c.req.param('id'), q.month));
+  });
+  priv.put('/teachers/:id/availability/days', async (c) => {
+    const input = (await rawBody(c)) as { confirm?: unknown };
+    return c.json(await setTeacherDay(ctx, c.get('actor'), c.req.param('id'), input, input?.confirm === true));
+  });
+
+  // --- 教室の受付時間（AV-06） ---
+  priv.get('/school-hours', async (c) => {
+    const q = query(c, z.object({ month: monthParam }));
+    return c.json(await schoolCalendar(ctx, c.get('actor'), q.month));
+  });
+  priv.put('/school-hours', async (c) => {
+    const input = (await rawBody(c)) as { confirm?: unknown };
+    return c.json(await setSchoolHours(ctx, c.get('actor'), input, input?.confirm === true));
   });
 
   // --- 予約（RS-06、RS-07） ---

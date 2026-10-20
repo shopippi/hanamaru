@@ -42,6 +42,26 @@ async function pickDayWithSlots(page: Page, nth: number) {
   throw new Error(`空き枠が${nth + 1}個以上ある日がありません`);
 }
 
+/** カレンダー（AV-06、AV-07）でその日（YYYY-MM-DD）を押す。月が違えば次の月へ進める */
+async function openCalendarDay(page: Page, date: string) {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  const title = page.locator('.cal-title');
+  await title.waitFor();
+  for (let i = 0; i < 3 && (await title.innerText()) !== `${y}年${m}月`; i++) {
+    await page.getByRole('button', { name: '次の月' }).click();
+    await expect(title).toHaveText(`${y}年${m}月`);
+  }
+  await page.getByRole('button', { name: new RegExp(`^${m}月${d}日（`) }).click();
+}
+
+/** 日付の文字（「10月22日（木）」）を YYYY-MM-DD にする。今日より前の月なら来年 */
+function dateFromLabel(label: string) {
+  const [, m, d] = /(\d+)月(\d+)日/.exec(label)!;
+  const now = new Date();
+  const year = Number(m) < now.getMonth() + 1 ? now.getFullYear() + 1 : now.getFullYear();
+  return `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
 /** 最初の空き枠を予約し、予約した日時の文字列を返す */
 async function bookFirstSlot(page: Page, nth = 0) {
   await page.goto(`${STUDENT}/book`);
@@ -188,8 +208,9 @@ test('AV-02 / AV-03 / PY-08 講師が予約のある日を不在にすると警�
   const t = await open(browser);
   await login(t, STAFF, 'teacher@example.test');
   await t.getByRole('navigation').getByRole('link', { name: '空き時間', exact: true }).click();
-  await t.getByLabel('日付').fill(date);
-  await t.getByRole('button', { name: '例外を追加する' }).click();
+  // カレンダーでその日を開き、休みにする（AV-07）
+  await openCalendarDay(t, date);
+  await t.getByRole('button', { name: 'この日は休みにする' }).click();
   const dialog = t.getByRole('dialog');
   await expect(dialog.getByText('予約が入っている時間帯があります')).toBeVisible();
   await expect(dialog.getByText(NAME).first()).toBeVisible();
@@ -208,8 +229,10 @@ test('AV-02 / AV-03 / PY-08 講師が予約のある日を不在にすると警�
   expect(sent.some((x) => x.to === EMAIL && x.text.includes('講師の都合'))).toBe(true);
   expect(sent.some((x) => x.to === 'admin@example.test' && x.text.includes('講師の都合'))).toBe(true);
 
-  // 後片付け: 不在の日を消す
-  await t.getByRole('button', { name: '削除' }).last().click();
+  // 後片付け: その日を毎週の型に戻す
+  await openCalendarDay(t, date);
+  await t.getByRole('button', { name: '毎週の型に戻す' }).click();
+  await expect(t.getByText(/空き時間を変更しました/)).toBeVisible();
   await t.context().close();
   await s.context().close();
 });
@@ -501,6 +524,39 @@ test('PY-03 / PY-06 カード払いに切り替えた生徒は、メールのリ
   await a.reload();
   await expect(a.getByRole('heading', { name: NAME })).toBeVisible();
   await expect(a.getByText('カードが登録されていません')).toHaveCount(0);
+  await a.context().close();
+  await s.context().close();
+});
+
+test('AV-06 / AV-08 教室の受付日をカレンダーで休みにすると、その日は生徒の予約画面に出ず、受付時間を入れ直すと戻る', async ({ browser }) => {
+  const s = await studentPage(browser);
+  await s.goto(`${STUDENT}/book`);
+  const chip = s.locator('.date-chip').first();
+  await chip.waitFor();
+  const dayLabel = (await chip.getAttribute('aria-label'))!.replace(/（空き\d+枠）$/, '');
+  const date = dateFromLabel(dayLabel);
+
+  const a = await adminPage(browser);
+  await adminNav(a, '受付日');
+  await openCalendarDay(a, date);
+  await a.getByRole('button', { name: '休みにする', exact: true }).click();
+  // その日に予約があれば、確認して教室都合で取り消す（AV-02 と同じ）
+  const dialog = a.getByRole('dialog');
+  if (await dialog.isVisible().catch(() => false)) await dialog.getByRole('button', { name: '予約を取り消して変更する' }).click();
+  await expect(a.getByText(/1日の休みにしました/)).toBeVisible();
+
+  await s.reload();
+  await s.locator('.date-chip').first().waitFor();
+  await expect(s.locator(`.date-chip[aria-label^="${dayLabel}"]`)).toHaveCount(0);
+
+  // 受付時間を入れ直す
+  await openCalendarDay(a, date);
+  await a.getByLabel('受付時間1の開始').fill('10:00');
+  await a.getByLabel('受付時間1の終了').fill('21:00');
+  await a.getByRole('button', { name: 'この時間で受け付ける' }).click();
+  await expect(a.getByText(/1日の受付時間を設定しました/)).toBeVisible();
+  await s.reload();
+  await expect(s.locator(`.date-chip[aria-label^="${dayLabel}"]`)).toBeVisible();
   await a.context().close();
   await s.context().close();
 });

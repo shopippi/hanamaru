@@ -253,7 +253,6 @@ export function Closures() {
 }
 
 type Settings = {
-  businessHours: ({ open: string; close: string } | null)[];
   publishWeeks: number;
   reserveDeadlineHours: number;
   changeDeadlineHours: number;
@@ -317,28 +316,6 @@ export function SettingsPage() {
           );
           return (
             <div className="stack-lg">
-              <Panel title="営業日・時間">
-                <div className="stack">
-                {s.businessHours.map((h, wd) => (
-                  <div key={wd} className="row">
-                    <span className="avatar avatar-sm">{WEEKDAY_LABELS[wd]}</span>
-                    <Checkbox
-                      label="営業"
-                      checked={!!h}
-                      onChange={(e) => set('businessHours', s.businessHours.map((x, i) => (i === wd ? (e.target.checked ? { open: '10:00', close: '21:00' } : null) : x)))}
-                    />
-                    {h && (
-                      <>
-                        <input aria-label={`${WEEKDAY_LABELS[wd]}曜の開始`} type="time" className="input" style={{ width: 'auto' }} value={h.open} onChange={(e) => set('businessHours', s.businessHours.map((x, i) => (i === wd ? { ...h, open: e.target.value } : x)))} />
-                        <span>〜</span>
-                        <input aria-label={`${WEEKDAY_LABELS[wd]}曜の終了`} type="time" className="input" style={{ width: 'auto' }} value={h.close} onChange={(e) => set('businessHours', s.businessHours.map((x, i) => (i === wd ? { ...h, close: e.target.value } : x)))} />
-                      </>
-                    )}
-                  </div>
-                ))}
-                {numField('publishWeeks', '生徒に予約を公開する期間（週）')}
-                </div>
-              </Panel>
               <Panel title="予約のルール">
                 <div className="stack">
                 <div className="grid-2">
@@ -346,6 +323,7 @@ export function SettingsPage() {
                   {numField('changeDeadlineHours', '変更の締切（何時間前まで）')}
                   {numField('cancelDeadlineHours', 'キャンセルの締切（何時間前まで）', 'これより後のキャンセルは回数が戻りません')}
                 </div>
+                {numField('publishWeeks', '生徒に予約を公開する期間（週）', '受付日と空き時間は「受付日」と講師の画面のカレンダーで決めます')}
                 <Checkbox label="予約を管理者の承認制にする（承認まで「仮予約」）" checked={s.approvalRequired} onChange={(e) => set('approvalRequired', e.target.checked)} />
                 </div>
               </Panel>

@@ -15,7 +15,7 @@ import { runJobs } from './domain/jobs.js';
 import { StaticCaptcha } from './http/captcha.js';
 import { createApp } from './http/index.js';
 import { hashPassword, totpCode } from './lib/crypto.js';
-import { monthOf } from './lib/time.js';
+import { addDays, dateOf, monthOf, weekdayOf } from './lib/time.js';
 
 // 開発・画面確認用のサーバー。本番では使わない。
 // - DB はメモリ上の PostgreSQL（PGlite）。DATABASE_URL を指定すると、手元の PostgreSQL を空にして使う
@@ -88,6 +88,13 @@ async function seed(db: Db, ctx: Ctx) {
     (await db.insert(schema.accounts).values({ role, email, displayName, passwordHash: pw, ...extra }).returning())[0]!;
 
   await mkAccount('admin', 'admin@example.test', '松田', { totpSecret: ADMIN_TOTP_SECRET, totpEnabled: true });
+  // 教室の受付時間（AV-06）の見本: 前後の約4か月、月〜金 10:00〜21:00、土 10:00〜18:00、日曜は休み
+  const hours: { date: string; startTime: string; endTime: string }[] = [];
+  for (let d = addDays(dateOf(now), -30); d < addDays(dateOf(now), 120); d = addDays(d, 1)) {
+    const wd = weekdayOf(d);
+    if (wd !== 0) hours.push({ date: d, startTime: '10:00', endTime: wd === 6 ? '18:00' : '21:00' });
+  }
+  await db.insert(schema.schoolHours).values(hours);
   const [piano] = await db.insert(schema.lessonTypes).values({ name: '個人 45分', kind: 'private', durationMinutes: 45, capacity: 1 }).returning();
   const [group] = await db.insert(schema.lessonTypes).values({ name: 'グループ 60分', kind: 'group', durationMinutes: 60, capacity: 4 }).returning();
   const [room1] = await db.insert(schema.rooms).values({ name: 'レッスン室1' }).returning();
