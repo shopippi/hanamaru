@@ -275,10 +275,15 @@ type Settings = {
   resetTokenMinutes: number;
   inviteTokenDays: number;
   reminderHour: number;
+  teacherPhotoRecommendedKB: number;
+  teacherPhotoHardMaxMB: number;
+  systemAlertIntervalHours: number;
+  stripeEventRetentionDays: number;
+  notificationBodyRetentionDays: number;
 };
 
 /** ログインに欠かせないため、設定にかかわらず送るメール（API の ALWAYS_SENT と同じ） */
-const ALWAYS_SENT = ['invite', 'password_reset'];
+const ALWAYS_SENT = ['invite', 'password_reset', 'system_alert'];
 
 const NOTIFY_LABEL: Record<string, string> = {
   reservation_confirmed: '予約の確定',
@@ -292,6 +297,7 @@ const NOTIFY_LABEL: Record<string, string> = {
   invite: '招待',
   password_reset: 'パスワード再設定',
   trial_request: '体験レッスンの申込',
+  system_alert: 'システムの要確認（管理者あて）',
 };
 
 export function SettingsPage() {
@@ -389,6 +395,15 @@ export function SettingsPage() {
                   {numField('lockMinutes', '上限に達したときのロック（分）')}
                   {numField('resetTokenMinutes', '再設定リンクの有効時間（分）')}
                   {numField('inviteTokenDays', '招待リンクの有効日数')}
+                </div>
+              </Panel>
+              <Panel title="講師の写真・システム">
+                <div className="grid-2">
+                  {numField('teacherPhotoRecommendedKB', '講師の写真のおすすめの大きさ（KB）', 'これを超えると、プロフィールの編集画面に「画質を下げる」を出します')}
+                  {numField('teacherPhotoHardMaxMB', '講師の写真の上限（MB）', 'これを超える写真は受け付けません')}
+                  {numField('systemAlertIntervalHours', '失敗が続くときの再通知の間隔（時間）', '定期処理が失敗したとき、管理者へのメールはこの間隔で1通だけ送ります')}
+                  {numField('stripeEventRetentionDays', 'Stripe の通知の記録を残す日数')}
+                  {numField('notificationBodyRetentionDays', '送ったメールの本文を残す日数', '過ぎたら本文だけを消し、送った記録は残します')}
                 </div>
               </Panel>
               <div className="panel" style={{ position: 'sticky', bottom: 16, zIndex: 5, boxShadow: 'var(--shadow-lg)' }}>
@@ -594,6 +609,11 @@ const ACTION_LABEL: Record<string, string> = {
   'closure.create': '休講',
   'closure.delete': '休講の取消',
   'course.price': '料金の改定',
+  'teacher.profile': '講師のプロフィールの変更',
+  'teacher.photo': '講師の写真の変更',
+  'teacher.photo_delete': '講師の写真の削除',
+  'notification.resend': '通知の再送',
+  'notification.dismiss': '通知を送らないことにした',
 };
 
 export function Audit() {
