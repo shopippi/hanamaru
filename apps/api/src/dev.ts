@@ -12,6 +12,8 @@ import { ConsoleEmailTransport, EmailChannel, NotificationService } from './doma
 import type { CheckoutRequest, PaymentEvent, PaymentGateway } from './domain/payment-gateway.js';
 import { handlePaymentEvent, createCourse, savePackage } from './domain/billing.js';
 import { runJobs } from './domain/jobs.js';
+import { importTeacherProfiles } from './domain/teacher-profiles.js';
+import { fileURLToPath } from 'node:url';
 import { StaticCaptcha } from './http/captcha.js';
 import { createApp } from './http/index.js';
 import { hashPassword, totpCode } from './lib/crypto.js';
@@ -115,6 +117,9 @@ async function seed(db: Db, ctx: Ctx) {
   const tA = await mkTeacher('matsuda', '松田 悠義', 'teacher@example.test');
   // 2人目は講師の切り替え（TC-02）を試すための見本
   const tB = await mkTeacher('sample-guitar', '見本 次郎', 'teacher2@example.test');
+  // 見本のプロフィールと写真を、以前のデータファイルから取り込む（TC-06。本番も同じ取り込みを使える）
+  const dataDir = fileURLToPath(new URL('../data/', import.meta.url));
+  await importTeacherProfiles(db, `${dataDir}teacher-profiles.json`, (photo) => `${dataDir}${photo}`, ctx.now());
   for (const wd of [1, 2, 3, 4, 5]) {
     await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: wd, startTime: '15:00', endTime: '20:00', lessonTypeId: piano!.id, roomId: room1!.id });
     await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: wd, startTime: '20:00', endTime: '22:00', lessonTypeId: pianoOnline!.id });

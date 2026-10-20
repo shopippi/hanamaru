@@ -109,7 +109,7 @@ test('UI-01 / UI-03 / UI-04 / UI-05 / UI-19 生徒の画面', async ({ page }) =
 
 test('UI-01 / UI-03 / UI-04 / UI-05 / UI-19 講師の画面', async ({ page }) => {
   await login(page, STAFF, 'teacher@example.test');
-  for (const path of ['/', '/students', '/availability', '/reviews']) {
+  for (const path of ['/', '/students', '/availability', '/reviews', '/profile']) {
     await page.goto(`${STAFF}${path}`);
     await page.locator('main h1').first().waitFor();
     await page.waitForTimeout(400);
@@ -125,6 +125,12 @@ test('UI-01 / UI-03 / UI-04 / UI-05 / UI-19 管理の画面', async ({ page }) =
     await page.waitForTimeout(500);
     expect(await audit(page), path).toEqual([]);
   }
+  // 講師の詳細（プロフィールと写真: TC-06）
+  await page.goto(`${MANAGE}/teachers`);
+  await page.getByRole('link', { name: 'プロフィール' }).first().click();
+  await page.getByRole('button', { name: 'プロフィールを保存' }).waitFor();
+  await page.waitForTimeout(400);
+  expect(await audit(page), '/teachers/:id').toEqual([]);
 });
 
 test('UI-02 強い警告は太い黒枠・警告アイコン・太字', async ({ page, context }) => {

@@ -6,3 +6,4 @@ export * from './auth-pages.js';
 export * from './availability-editor.js';
 export * from './icons.js';
 export * from './month-calendar.js';
+export * from './profile-editor.js';

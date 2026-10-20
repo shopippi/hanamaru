@@ -24,7 +24,8 @@ export interface StudentRow {
 export interface Teacher {
   id: string;
   name: string;
-  profileSlug: string;
+  /** 担当の楽器（プロフィール: TC-06） */
+  instruments: string[];
   active: boolean;
   email: string;
 }

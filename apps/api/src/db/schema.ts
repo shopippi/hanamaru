@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  customType,
   index,
   integer,
   jsonb,
@@ -134,10 +135,29 @@ export const teachers = pgTable('teachers', {
   id: id(),
   accountId: uuid('account_id').notNull().unique().references(() => accounts.id),
   name: text('name').notNull(),
-  /** プロフィールのデータファイル（TC-06）のキー */
-  profileSlug: text('profile_slug').notNull().unique(),
+  /** 以前のプロフィールのデータファイルのキー。取り込み（importTeacherProfiles）にだけ使う */
+  profileSlug: text('profile_slug').unique(),
   active: boolean('active').notNull().default(true),
+  /** 生徒に見せるプロフィール（TC-05、TC-06）。管理画面と講師本人が編集する */
+  instruments: text('instruments').array().notNull().default(sql`'{}'::text[]`),
+  career: text('career').notNull().default(''),
+  message: text('message').notNull().default(''),
   createdAt: createdAt(),
+});
+
+const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
+  dataType: () => 'bytea',
+  fromDriver: (v) => Buffer.from(v),
+});
+
+/** 講師の写真（TC-06）。講師の行を軽く保つため別にする */
+export const teacherPhotos = pgTable('teacher_photos', {
+  teacherId: uuid('teacher_id')
+    .primaryKey()
+    .references(() => teachers.id, { onDelete: 'cascade' }),
+  contentType: text('content_type').notNull(),
+  data: bytea('data').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
 });
 
 /** 担当講師（TC-01）。行を消すと担当を外す（TC-04: 既存の予約は残る） */

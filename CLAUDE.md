@@ -37,7 +37,7 @@
   - `src/integrations/stripe.ts` Stripe の実装。業務ルールからは `domain/payment-gateway.ts` の形だけを使い、テストでは `test/fake-gateway.ts` に差し替える
   - `src/domain/jobs.ts` 定期処理（数分おきに全部流す。どれも何度実行しても結果が同じになるように書く）
   - `scripts/stripe-setup.ts` Stripe の初期設定（カスタマーポータル）
-  - `data/teacher-profiles.json` 講師プロフィール（TC-06）
+  - 講師プロフィールはデータベース（`teachers`・`teacher_photos`、`domain/teacher-profiles.ts`）。`data/teacher-profiles.json` は取り込み（`scripts/import-teacher-profiles.ts`）と開発用の見本だけに使う（TC-06）
   - `test/` 受入テスト（PGlite のメモリ上の PostgreSQL で動く）
 - `apps/student/` 生徒の画面（ホーム画面アプリ、PWA）。`public/sw.js` が Service Worker
 - `apps/staff/` 講師の画面、`apps/manage/` 管理者の画面

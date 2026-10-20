@@ -1160,6 +1160,58 @@ button.list-row.disclosure {
   width: auto;
 }
 
+/* 講師のプロフィールの編集（TC-06、TC-07） */
+.profile-photo-edit {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  flex-wrap: wrap;
+}
+.profile-photo.profile-photo-lg {
+  width: 96px;
+  height: 96px;
+}
+.avatar.avatar-xl {
+  width: 96px;
+  height: 96px;
+  font-size: 32px;
+}
+/* 講師を登録したあとの「次にすること」 */
+.checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: step;
+}
+.checklist > li {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) 0;
+  counter-increment: step;
+}
+.checklist > li + li {
+  border-top: 1px solid var(--border);
+}
+.checklist > li::before {
+  content: counter(step);
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent-soft, var(--gray-100));
+  color: var(--accent, var(--ink));
+  font-size: 13px;
+  font-weight: 700;
+}
+.checklist > li.done::before {
+  background: var(--accent, var(--ink));
+  color: var(--gray-0);
+}
+
 /* 進み具合の線 */
 .meter {
   height: 6px;

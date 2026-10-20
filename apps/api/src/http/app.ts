@@ -127,8 +127,17 @@ export function createBaseApp(): Hono<Env> {
   });
   app.use('/api/*', async (c, next) => {
     await next();
-    c.header('Cache-Control', 'no-store');
+    // 写真など、返す側でキャッシュの指定をしたものはそのまま
+    if (!c.res.headers.has('Cache-Control')) c.header('Cache-Control', 'no-store');
   });
   app.get('/api/health', (c) => c.json({ ok: true }));
   return app;
+}
+
+/** 講師の写真を返す（TC-06）。URL に更新日時が付くので、ブラウザに1日置いてよい。本人のログインが要るので private */
+export function photoResponse(c: Context, photo: { contentType: string; data: Buffer; updatedAt: Date }) {
+  const etag = `"${photo.updatedAt.getTime()}"`;
+  const headers = { ETag: etag, 'Cache-Control': 'private, max-age=86400' };
+  if (c.req.header('if-none-match') === etag) return c.body(null, 304, headers);
+  return c.body(new Uint8Array(photo.data), 200, { ...headers, 'Content-Type': photo.contentType, 'X-Content-Type-Options': 'nosniff' });
 }
