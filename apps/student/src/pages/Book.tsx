@@ -176,7 +176,7 @@ export function Book() {
                         <p className="field-label" id="day-label">
                           日にち
                         </p>
-                        <div className="date-strip" role="group" aria-labelledby="day-label">
+                        <div key={mode} className="date-strip" role="group" aria-labelledby="day-label">
                           {days.map((d) => {
                             const p = dateParts(`${d}T12:00:00+09:00`);
                             const n = byDay.get(d)!.length;
