@@ -32,6 +32,8 @@ export interface InvoiceStatus {
 export type PaymentEvent =
   | { id: string; type: 'checkout_paid'; paymentId: string; sessionId: string; paymentMethodId: string | null }
   | { id: string; type: 'checkout_failed'; paymentId: string; sessionId: string }
+  /** カードの登録だけの画面（支払いなし）で、カードが登録された（PY-03） */
+  | { id: string; type: 'card_registered'; studentId: string; sessionId: string; paymentMethodId: string | null }
   | { id: string; type: 'invoice_paid'; subscriptionId: string; invoiceId: string; periodStart: Date; amount: number }
   /** サブスクリプションが終わった（月末で止めたものが終わった、Stripe の画面で解約されたなど） */
   | { id: string; type: 'subscription_deleted'; subscriptionId: string }
@@ -48,6 +50,10 @@ export type PaymentEvent =
 export interface PaymentGateway {
   createCustomer(input: { name: string; email: string | null; studentId: string }): Promise<string>;
   createCheckout(req: CheckoutRequest): Promise<{ id: string; url: string }>;
+  /** 支払いをせずにカードだけを登録する Stripe の画面。metadata に studentId を入れ、通知で照合する */
+  createCardSetup(input: { customerId: string; studentId: string; successUrl: string; cancelUrl: string }): Promise<{ id: string; url: string }>;
+  /** カードの登録の画面の状態（通知が届かなかった場合の照合用。OP-02） */
+  cardSetupStatus(sessionId: string): Promise<{ status: 'complete' | 'open' | 'expired'; paymentMethodId: string | null }>;
   /** 月額コースの料金（毎月・税込・円）を Stripe の Price として用意する */
   createMonthlyPrice(input: { coursePriceId: string; courseName: string; amount: number }): Promise<string>;
   /** startAt（翌月1日 9:00。lib/time.ts の billingAnchor）から毎月課金するサブスクリプション。日割りなし（PY-03） */

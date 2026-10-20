@@ -117,6 +117,8 @@ export const students = pgTable(
     billingMethod: billingMethodEnum('billing_method').notNull().default('card'),
     stripeCustomerId: text('stripe_customer_id'),
     stripeSubscriptionId: text('stripe_subscription_id'),
+    /** カードの登録（PY-03）の Stripe の画面。登録が済むか照合が終わるまで持つ */
+    cardSetupSessionId: text('card_setup_session_id'),
     /** 管理用備考: 管理者だけ（SR-03） */
     adminNote: text('admin_note').notNull().default(''),
     /** 講師用備考: 管理者と担当講師全員（SR-03） */

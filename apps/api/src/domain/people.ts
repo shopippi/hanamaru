@@ -20,7 +20,7 @@ import { issueInvite, normalizeEmail, type Account } from './auth.js';
 import type { Actor, Ctx } from './context.js';
 import { conflict, forbidden, invalid, notFound } from './errors.js';
 import { parseCsv } from '../lib/csv.js';
-import { applyBillingChange, assertCanSwitchToCard, resumeBilling, stopBilling, undoStopBilling } from './billing.js';
+import { applyBillingChange, needsCard, resumeBilling, stopBilling, undoStopBilling } from './billing.js';
 import { cancelForCause, sendNotices } from './booking.js';
 import { DomainError } from './errors.js';
 
@@ -184,7 +184,6 @@ export async function updateStudent(ctx: Ctx, actor: Actor, studentId: string, r
   assertAdmin(actor);
   const patch = parse(studentPatch, raw);
   const before = await loadStudent(ctx.db, studentId);
-  assertCanSwitchToCard(before, patch.billingMethod);
   const updated = await ctx.db.transaction(async (tx) => {
     const [s] = await tx.update(students).set(patch).where(eq(students.id, studentId)).returning();
     await audit(tx, actor, 'student.update', 'student', studentId, patch);
@@ -368,6 +367,8 @@ export async function studentDetailForAdmin(ctx: Ctx, actor: Actor, studentId: s
     lessonRecords: records,
     creditLedger: ledger,
     payments: paymentRows,
+    /** カード払いなのにカードが未登録（PY-03） */
+    needsCard: needsCard(s),
   };
 }
 

@@ -67,9 +67,13 @@ export async function login(ctx: Ctx, portal: Role, email: string, password: str
     await verifyPassword(password, DUMMY_HASH);
     throw unauthorized(LOGIN_FAILED);
   }
-  if (account.lockedUntil && account.lockedUntil > now) throw unauthorized(LOCKED);
-  if (!(await verifyPassword(password, account.passwordHash))) {
-    throw unauthorized((await countFailure(ctx, account.id, 'password')) ? LOCKED : LOGIN_FAILED);
+  const passwordOk = await verifyPassword(password, account.passwordHash);
+  // ロック中は、パスワードが正しいときだけ「一時的にログインできません」と出す。
+  // 間違ったパスワードには通常の失敗と同じ文言を返し、アカウントがあるかどうかを知らせない（AU-02、AU-05）
+  if (account.lockedUntil && account.lockedUntil > now) throw unauthorized(passwordOk ? LOCKED : LOGIN_FAILED);
+  if (!passwordOk) {
+    await countFailure(ctx, account.id, 'password');
+    throw unauthorized(LOGIN_FAILED);
   }
   if (account.role === 'student' && (await allStudentsWithdrawn(ctx.db, account.id))) {
     throw unauthorized('退会済みのためログインできません。教室にお問い合わせください');

@@ -64,6 +64,30 @@ export class StripeGateway implements PaymentGateway {
     return { id: session.id, url: session.url };
   }
 
+  async createCardSetup(input: { customerId: string; studentId: string; successUrl: string; cancelUrl: string }): Promise<{ id: string; url: string }> {
+    const session = await this.stripe.checkout.sessions.create({
+      mode: 'setup',
+      customer: input.customerId,
+      locale: 'ja',
+      currency: 'jpy',
+      allowed_payment_method_types: ['card'],
+      setup_intent_data: { metadata: { studentId: input.studentId } },
+      metadata: { studentId: input.studentId, purpose: 'card_setup' },
+      success_url: input.successUrl,
+      cancel_url: input.cancelUrl,
+    });
+    if (!session.url) throw new Error('checkout session has no url');
+    return { id: session.id, url: session.url };
+  }
+
+  async cardSetupStatus(sessionId: string): Promise<{ status: 'complete' | 'open' | 'expired'; paymentMethodId: string | null }> {
+    const s = await this.stripe.checkout.sessions.retrieve(sessionId, { expand: ['setup_intent'] });
+    const si = typeof s.setup_intent === 'object' ? s.setup_intent : null;
+    if (s.status === 'complete' && si?.status === 'succeeded') return { status: 'complete', paymentMethodId: idOf(si.payment_method) };
+    if (s.status === 'expired') return { status: 'expired', paymentMethodId: null };
+    return { status: 'open', paymentMethodId: null };
+  }
+
   async createMonthlyPrice(input: { coursePriceId: string; courseName: string; amount: number }): Promise<string> {
     const price = await this.stripe.prices.create(
       {
@@ -182,6 +206,13 @@ export class StripeGateway implements PaymentGateway {
       case 'checkout.session.completed':
       case 'checkout.session.async_payment_succeeded': {
         const s = event.data.object;
+        // カードの登録だけの画面（PY-03）
+        if (s.mode === 'setup' && s.metadata?.purpose === 'card_setup' && s.metadata.studentId) {
+          const siId = idOf(s.setup_intent);
+          const si = siId ? await this.stripe.setupIntents.retrieve(siId) : null;
+          if (si?.status !== 'succeeded') return null;
+          return { id: event.id, type: 'card_registered', studentId: s.metadata.studentId, sessionId: s.id, paymentMethodId: idOf(si.payment_method) };
+        }
         const paymentId = s.metadata?.paymentId;
         // コンビニ払いは、店頭で支払うまで completed でも未入金（PY-16）
         if (!paymentId || s.payment_status !== 'paid') return null;

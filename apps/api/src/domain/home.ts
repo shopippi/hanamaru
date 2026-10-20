@@ -4,6 +4,7 @@ import { addMonths, monthOf } from '../lib/time.js';
 import { studentForActor } from './access.js';
 import { studentBlocker } from './booking.js';
 import type { Actor, Ctx } from './context.js';
+import { needsCard } from './billing.js';
 import { availableCredits, hasAutopay } from './credits.js';
 import { getSettings } from './settings.js';
 
@@ -63,7 +64,7 @@ export async function studentHome(ctx: Ctx, actor: Actor, studentId: string) {
         ? 'paid'
         : target.status === 'failed'
           ? 'failed'
-          : target.stripeCheckoutSessionId || target.method === 'card'
+          : target.stripeCheckoutSessionId || (target.method === 'card' && !needsCard(s))
             ? 'confirming'
             : 'unpaid';
   }
@@ -77,6 +78,8 @@ export async function studentHome(ctx: Ctx, actor: Actor, studentId: string) {
     nextReservation: next ?? null,
     payment,
     autopay: hasAutopay(s),
+    /** カード払いなのにカードが未登録。トップで登録をお願いする（PY-03） */
+    needsCard: needsCard(s),
     course: course ? { name: course.name, lessonsPerMonth: course.lessonsPerMonth } : null,
     /** 予約できない理由（RS-02）。予約ボタンを押せなくして表示する */
     blocker: await studentBlocker(ctx.db, s, now, settings),

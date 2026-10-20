@@ -15,6 +15,7 @@ export const NOTIFICATION_TYPES = [
   'payment_succeeded',
   'payment_failed',
   'payment_link',
+  'card_registration',
   'invite',
   'password_reset',
   'trial_request',

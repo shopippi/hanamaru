@@ -23,6 +23,8 @@ export interface Home {
   nextReservation: { id: string; startsAt: string; endsAt: string; status: string; teacherName: string; lessonTypeName: string } | null;
   payment: 'paid' | 'confirming' | 'unpaid' | 'failed' | 'none';
   autopay: boolean;
+  /** カード払いなのにカードが未登録。登録をお願いする（PY-03） */
+  needsCard: boolean;
   course: { name: string; lessonsPerMonth: number } | null;
   blocker: string | null;
 }

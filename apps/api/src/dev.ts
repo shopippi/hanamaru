@@ -35,6 +35,8 @@ const ADMIN_TOTP_SECRET = 'JBSWY3DPEHPK3PXP'; // 開発用の固定値
 class DevGateway implements PaymentGateway {
   seq = 0;
   sessions = new Map<string, CheckoutRequest & { status: 'open' | 'paid' }>();
+  /** カードの登録だけの画面 */
+  setups = new Map<string, { studentId: string; successUrl: string; cancelUrl: string; status: 'open' | 'complete' }>();
   async createCustomer() {
     return `cus_dev_${++this.seq}`;
   }
@@ -42,6 +44,14 @@ class DevGateway implements PaymentGateway {
     const id = `cs_dev_${++this.seq}`;
     this.sessions.set(id, { ...req, status: 'open' });
     return { id, url: `${API_ORIGIN}/dev/checkout/${id}` };
+  }
+  async createCardSetup(input: { studentId: string; successUrl: string; cancelUrl: string }) {
+    const id = `cs_dev_setup_${++this.seq}`;
+    this.setups.set(id, { ...input, status: 'open' });
+    return { id, url: `${API_ORIGIN}/dev/checkout/${id}` };
+  }
+  async cardSetupStatus(id: string) {
+    return { status: this.setups.get(id)?.status === 'complete' ? ('complete' as const) : ('open' as const), paymentMethodId: 'pm_dev' };
   }
   async createMonthlyPrice() {
     return `price_dev_${++this.seq}`;
@@ -162,6 +172,14 @@ const app = createApp({ ctx, captcha: new StaticCaptcha(true), secureCookies: fa
 // --- 開発用の画面（決済の代わり・二段階認証のコード） ---
 const dev = new Hono();
 dev.get('/checkout/:id', (c) => {
+  const setup = gateway.setups.get(c.req.param('id'));
+  if (setup) {
+    return c.html(`<!doctype html><meta name="viewport" content="width=device-width"><title>テストのカード登録</title>
+    <body style="font-family:sans-serif;max-width:480px;margin:40px auto;padding:0 16px">
+    <h1>カードの登録（開発用）</h1><p>本番では Stripe のカード登録画面が開きます。支払いは発生しません。</p>
+    <form method="post"><button style="font-size:18px;padding:12px 24px">テストのカードを登録する</button></form>
+    <p><a href="${setup.cancelUrl}">戻る</a></p></body>`);
+  }
   const s = gateway.sessions.get(c.req.param('id'));
   if (!s) return c.text('not found', 404);
   return c.html(`<!doctype html><meta name="viewport" content="width=device-width"><title>テスト決済</title>
@@ -172,6 +190,12 @@ dev.get('/checkout/:id', (c) => {
 });
 dev.post('/checkout/:id', async (c) => {
   const id = c.req.param('id');
+  const setup = gateway.setups.get(id);
+  if (setup) {
+    setup.status = 'complete';
+    await handlePaymentEvent(ctx, { id: `evt_${id}`, type: 'card_registered', studentId: setup.studentId, sessionId: id, paymentMethodId: 'pm_dev' });
+    return c.redirect(setup.successUrl);
+  }
   const s = gateway.sessions.get(id);
   if (!s) return c.text('not found', 404);
   s.status = 'paid';

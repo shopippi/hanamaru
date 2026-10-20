@@ -26,6 +26,7 @@ import {
   fmtYen,
   monthKey,
   useAction,
+  Warning,
   useLoad,
   useToast,
 } from '@hanamaru/ui';
@@ -46,6 +47,8 @@ interface Detail {
   scheduledStatusAt: string | null;
   courseId: string | null;
   billingMethod: string;
+  /** カード払いなのにカードが未登録（PY-03） */
+  needsCard: boolean;
   adminNote: string;
   teacherNote: string;
   accountEmail: string | null;
@@ -136,6 +139,7 @@ export function StudentDetail() {
               <span className="row-tight">
                 <span className={d.status === 'active' ? 'badge badge-dot' : 'badge'}>{STUDENT_STATUS_LABEL[d.status]}</span>
                 {!d.approved && <span className="badge badge-strong">承認待ち</span>}
+                {d.needsCard && <span className="badge badge-strong">カード未登録</span>}
                 {d.scheduledStatus && d.scheduledStatusAt && (
                   <span className="badge badge-muted">
                     {fmtDate(d.scheduledStatusAt)}から
@@ -146,6 +150,7 @@ export function StudentDetail() {
             }
           />
           <div className="stack-lg">
+            {d.needsCard && <CardRequest studentId={d.id} />}
             <StatusSection d={d} onChanged={reload} />
             <div className="grid-2">
               <InfoSection d={d} courses={courses} onSaved={reload} />
@@ -562,5 +567,30 @@ function PaymentsSection({ d, packages, onChanged }: { d: Detail; packages: Pack
       </div>
       <Notice>入金済みにすると、日時・金額・方法「現金」・操作した人が記録されます。</Notice>
     </section>
+  );
+}
+
+/** カード払いなのにカードがない生徒に、登録のお願いを送る（PY-03） */
+function CardRequest({ studentId }: { studentId: string }) {
+  const toast = useToast();
+  const send = useAction(async () => {
+    try {
+      await api.post(`/students/${studentId}/card-request`);
+      toast('カード登録のお願いを送りました');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '送れませんでした', 'error');
+    }
+  });
+  return (
+    <Warning title="カードが登録されていません">
+      <div className="stack-sm">
+        <p>支払い方法はカードですが、まだカードが登録されていないため自動課金が始まっていません。生徒がトップ画面からカードを登録すると、翌月1日から自動課金になります。</p>
+        <div>
+          <Button variant="secondary" onClick={() => void send.run()} pending={send.pending}>
+            カード登録のお願いを送る
+          </Button>
+        </div>
+      </div>
+    </Warning>
   );
 }

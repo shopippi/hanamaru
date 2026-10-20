@@ -11,6 +11,8 @@ export class FakeGateway implements PaymentGateway {
   seq = 0;
   customers: { id: string; studentId: string }[] = [];
   checkouts: (CheckoutRequest & { id: string; url: string })[] = [];
+  cardSetups: { id: string; url: string; customerId: string; studentId: string }[] = [];
+  cardSetupStatuses = new Map<string, { status: 'complete' | 'open' | 'expired'; paymentMethodId: string | null }>();
   prices: { id: string; amount: number }[] = [];
   subscriptions: {
     id: string;
@@ -48,6 +50,16 @@ export class FakeGateway implements PaymentGateway {
     const url = `https://checkout.stripe.test/${id}`;
     this.checkouts.push({ ...req, id, url });
     return { id, url };
+  }
+  async createCardSetup(input: { customerId: string; studentId: string }) {
+    this.maybeFail();
+    const id = this.next('cs_setup');
+    const url = `https://checkout.stripe.test/${id}`;
+    this.cardSetups.push({ id, url, customerId: input.customerId, studentId: input.studentId });
+    return { id, url };
+  }
+  async cardSetupStatus(sessionId: string) {
+    return this.cardSetupStatuses.get(sessionId) ?? { status: 'open' as const, paymentMethodId: null };
   }
   async createMonthlyPrice(input: { amount: number }) {
     const id = this.next('price');
