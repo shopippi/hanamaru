@@ -1,0 +1,84 @@
+import { and, asc, eq, gte, inArray } from 'drizzle-orm';
+import { courses, lessonTypes, payments, reservations, students, teachers } from '../db/schema.js';
+import { addMonths, monthOf } from '../lib/time.js';
+import { studentForActor } from './access.js';
+import { studentBlocker } from './booking.js';
+import type { Actor, Ctx } from './context.js';
+import { availableCredits, hasAutopay } from './credits.js';
+import { getSettings } from './settings.js';
+
+// 生徒のトップ（MB-01）: 今月の残り回数、次の予約、お支払い状況を1画面で
+
+/** 保護者アカウントの子ども一覧（ST-04 の切り替え用） */
+export async function myStudents(ctx: Ctx, actor: Actor) {
+  if (actor.kind !== 'account') return [];
+  return ctx.db
+    .select({ id: students.id, name: students.name, status: students.status })
+    .from(students)
+    .where(eq(students.accountId, actor.accountId))
+    .orderBy(asc(students.createdAt));
+}
+
+export type PaymentState = 'paid' | 'confirming' | 'unpaid' | 'failed' | 'none';
+
+export async function studentHome(ctx: Ctx, actor: Actor, studentId: string) {
+  const s = await studentForActor(ctx.db, actor, studentId);
+  const now = ctx.now();
+  const month = monthOf(now);
+  const settings = await getSettings(ctx.db);
+  const [next] = await ctx.db
+    .select({
+      id: reservations.id,
+      startsAt: reservations.startsAt,
+      endsAt: reservations.endsAt,
+      status: reservations.status,
+      teacherName: teachers.name,
+      lessonTypeName: lessonTypes.name,
+    })
+    .from(reservations)
+    .innerJoin(teachers, eq(teachers.id, reservations.teacherId))
+    .innerJoin(lessonTypes, eq(lessonTypes.id, reservations.lessonTypeId))
+    .where(
+      and(
+        eq(reservations.studentId, s.id),
+        inArray(reservations.status, ['pending', 'confirmed']),
+        gte(reservations.endsAt, now),
+      ),
+    )
+    .orderBy(asc(reservations.startsAt))
+    .limit(1);
+
+  const paymentRows = await ctx.db
+    .select()
+    .from(payments)
+    .where(and(eq(payments.studentId, s.id), inArray(payments.status, ['pending', 'failed', 'succeeded'])));
+  const monthly = paymentRows.find((p) => p.kind === 'monthly' && p.month === month);
+  const enrollment = paymentRows.find((p) => p.kind === 'enrollment');
+  // 決済画面から戻っても、入金確定の通知が届くまでは「確認中」（PY-05）
+  let payment: PaymentState = 'none';
+  const target = monthly ?? (s.status === 'enrolling' ? enrollment : undefined);
+  if (target) {
+    payment =
+      target.status === 'succeeded'
+        ? 'paid'
+        : target.status === 'failed'
+          ? 'failed'
+          : target.stripeCheckoutSessionId || target.method === 'card'
+            ? 'confirming'
+            : 'unpaid';
+  }
+  const [course] = s.courseId ? await ctx.db.select().from(courses).where(eq(courses.id, s.courseId)) : [];
+
+  return {
+    student: { id: s.id, name: s.name, status: s.status, scheduledStatus: s.scheduledStatus, scheduledStatusAt: s.scheduledStatusAt },
+    month,
+    remaining: Math.max(0, await availableCredits(ctx.db, s, month, now)),
+    nextMonth: { month: addMonths(month, 1), remaining: Math.max(0, await availableCredits(ctx.db, s, addMonths(month, 1), now)) },
+    nextReservation: next ?? null,
+    payment,
+    autopay: hasAutopay(s),
+    course: course ? { name: course.name, lessonsPerMonth: course.lessonsPerMonth } : null,
+    /** 予約できない理由（RS-02）。予約ボタンを押せなくして表示する */
+    blocker: await studentBlocker(ctx.db, s, now, settings),
+  };
+}

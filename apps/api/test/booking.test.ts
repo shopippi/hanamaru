@@ -453,7 +453,7 @@ describe('5.2 権限: 生徒は他の生徒の予約を操作できない', () =
   test('保護者は自分の子どもを切り替えて、それぞれ予約できる（ST-04）', async () => {
     const f = await setup();
     const first = await f.mkStudent('長女', { credits: 4 });
-    const second = await f.mkStudent('長男', { credits: 1, account: first.account as { id: string; role: 'student' } });
+    const second = await f.mkStudent('長男', { credits: 1, account: first.account });
     const input = { teacherId: f.teacherA.teacher.id, lessonTypeId: f.privateType.id };
     await bookAsStudent(f.ctx, first.actor, { ...input, studentId: second.student.id, startsAt: THU });
     expect(await balance(f.db, second.student.id, '2026-10')).toBe(0);

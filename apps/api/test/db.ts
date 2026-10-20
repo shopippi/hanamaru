@@ -1,4 +1,5 @@
 import { PGlite } from '@electric-sql/pglite';
+import { onTestFinished } from 'vitest';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import * as schema from '../src/db/schema.js';
@@ -19,5 +20,7 @@ function migrated(): Promise<PGlite> {
 /** テストごとに空のデータベースを作る */
 export async function testDb(): Promise<Db> {
   const client = (await (await migrated()).clone()) as PGlite;
+  // メモリを返す（閉じないとテストの数だけ WASM のメモリが残る）
+  onTestFinished(() => client.close());
   return drizzle(client, { schema }) as unknown as Db;
 }

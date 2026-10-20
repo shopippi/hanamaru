@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import type { Db } from '../src/db/client.js';
 import {
   accounts,
@@ -23,6 +24,11 @@ export async function setup(now = jst('2026-10-20', '10:00')) {
     db,
     now: () => clock.now,
     notifier: new NotificationService(db, [new EmailChannel(mail)]),
+    urls: {
+      student: 'https://student.example.test',
+      staff: 'https://staff.example.test',
+      manage: 'https://manage.example.test',
+    },
   };
 
   const mkAccount = async (role: 'student' | 'teacher' | 'admin', email: string, name: string) => {
@@ -85,9 +91,11 @@ export async function setup(now = jst('2026-10-20', '10:00')) {
   /** 保護者アカウントと生徒（在籍中、講師Aが担当、今月の回数 credits 回） */
   const mkStudent = async (
     name: string,
-    opts: { credits?: number; account?: { id: string; role: 'student' }; teachers?: string[]; autopay?: boolean } = {},
+    opts: { credits?: number; account?: { id: string }; teachers?: string[]; autopay?: boolean } = {},
   ) => {
-    const account = opts.account ?? (await mkAccount('student', `${name}@example.test`, `${name}の保護者`));
+    const account = opts.account
+      ? (await db.select().from(accounts).where(eq(accounts.id, opts.account.id)))[0]!
+      : await mkAccount('student', `${name}@example.test`, `${name}の保護者`);
     const [s] = await db
       .insert(students)
       .values({
@@ -103,7 +111,7 @@ export async function setup(now = jst('2026-10-20', '10:00')) {
       await db.insert(studentTeachers).values({ studentId: s!.id, teacherId: t });
     }
     if (opts.credits) await grant(s!.id, monthOf(clock.now), opts.credits);
-    return { student: s!, actor: actorOf(account as { id: string; role: 'student' }), account };
+    return { student: s!, actor: actorOf(account), account };
   };
 
   const grant = async (studentId: string, month: Month, n: number) => {
