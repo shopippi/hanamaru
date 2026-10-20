@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ConfirmDialog,
+  DateTile,
   Empty,
+  IconCalendar,
   Loadable,
   Skeleton,
   Warning,
@@ -39,13 +41,14 @@ const CANCEL_LABEL: Record<string, string> = {
 
 function ListSkeleton() {
   return (
-    <ul className="list">
-      {[0, 1, 2].map((i) => (
-        <li key={i}>
+    <div className="stack">
+      {[0, 1].map((i) => (
+        <div key={i} className="card">
           <Skeleton lines={2} />
-        </li>
+          <div className="skeleton" style={{ height: 44, marginTop: 12 }} />
+        </div>
       ))}
-    </ul>
+    </div>
   );
 }
 
@@ -87,7 +90,9 @@ export function Reservations() {
             <div className="stack-lg">
               {upcoming.length === 0 ? (
                 <Empty
+                  icon={<IconCalendar />}
                   message="予約はまだありません"
+                  text="空いている日時から、レッスンを予約できます。"
                   action={
                     <Link className="btn btn-primary" to="/book">
                       予約する
@@ -95,49 +100,60 @@ export function Reservations() {
                   }
                 />
               ) : (
-                <ul className="list">
-                  {upcoming.map((r) => (
-                    <li key={r.id} className="stack">
-                      <div>
-                        <strong style={{ fontSize: 18 }}>
-                          {fmtDate(r.startsAt)} {fmtTimeRange(r.startsAt, r.endsAt)}
-                        </strong>
-                        {r.status === 'pending' && <span className="badge" style={{ marginLeft: 8 }}>仮予約</span>}
-                        <br />
-                        {r.teacherName}・{r.lessonTypeName}
-                      </div>
-                      <div className="row">
-                        <Link
-                          className="btn btn-secondary"
-                          to={`/book?change=${r.id}`}
-                          aria-disabled={!online || undefined}
-                          onClick={(e) => !online && e.preventDefault()}
-                        >
-                          日時を変更
-                        </Link>
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          disabled={!online || openCancel.pending}
-                          onClick={() => void openCancel.run(r.id)}
-                          aria-label={`${fmtDate(r.startsAt)}の予約をキャンセル`}
-                        >
-                          キャンセル
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                <section className="stack" aria-labelledby="upcoming-title">
+                  <h2 className="section-label" id="upcoming-title">
+                    これからの予約<span className="num">（{upcoming.length}件）</span>
+                  </h2>
+                  <ul className="stack reservation-list">
+                    {upcoming.map((r) => (
+                      <li key={r.id} className="card reservation">
+                        <div className="list-row">
+                          <DateTile at={r.startsAt} />
+                          <div className="list-row-main">
+                            <p className="reservation-time num">
+                              {fmtDate(r.startsAt)} {fmtTimeRange(r.startsAt, r.endsAt)}
+                            </p>
+                            <p className="list-meta">
+                              {r.teacherName}・{r.lessonTypeName}
+                            </p>
+                          </div>
+                          {r.status === 'pending' && <span className="badge badge-strong">仮予約</span>}
+                        </div>
+                        <div className="reservation-actions">
+                          <Link
+                            className="btn btn-secondary"
+                            to={`/book?change=${r.id}`}
+                            aria-disabled={!online || undefined}
+                            onClick={(e) => !online && e.preventDefault()}
+                          >
+                            日時を変更
+                          </Link>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            disabled={!online || openCancel.pending}
+                            onClick={() => void openCancel.run(r.id)}
+                            aria-label={`${fmtDate(r.startsAt)}の予約をキャンセル`}
+                          >
+                            キャンセル
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               )}
               {past.length > 0 && (
-                <details>
-                  <summary style={{ minHeight: 44, display: 'flex', alignItems: 'center', cursor: 'pointer' }}>これまでの予約（{past.length}件）</summary>
+                <details className="panel history">
+                  <summary>これまでの予約（{past.length}件）</summary>
                   <ul className="list">
                     {past.map((r) => (
-                      <li key={r.id}>
-                        {fmtDateTime(r.startsAt)}　{r.teacherName}
-                        <span className="small muted">
-                          {' '}
+                      <li key={r.id} className="list-row">
+                        <span className="list-row-main">
+                          <span className="num">{fmtDateTime(r.startsAt)}</span>
+                          <span className="list-meta">{r.teacherName}</span>
+                        </span>
+                        <span className={r.status === 'cancelled' ? 'badge badge-muted' : 'badge'}>
                           {r.status === 'cancelled' ? CANCEL_LABEL[r.cancelKind ?? ''] ?? '取消' : r.attendance === 'no_show' ? '欠席' : '受講'}
                         </span>
                       </li>
@@ -161,9 +177,16 @@ export function Reservations() {
       >
         {preview && (
           <div className="stack">
-            <p>
-              <strong>{fmtDateTime(preview.startsAt)}</strong>
-            </p>
+            <dl className="summary">
+              <div>
+                <dt>日時</dt>
+                <dd className="num">{fmtDateTime(preview.startsAt)}</dd>
+              </div>
+              <div>
+                <dt>締切</dt>
+                <dd className="num">{fmtDateTime(preview.deadline)}</dd>
+              </div>
+            </dl>
             {preview.refund ? (
               <p>締切（{fmtDateTime(preview.deadline)}）より前なので、使った回数を1回お戻しします。</p>
             ) : (

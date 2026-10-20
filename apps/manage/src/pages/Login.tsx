@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, LoginPage, Notice, TextField, Warning } from '@hanamaru/ui';
+import { AuthFrame, Button, LoginPage, Notice, TextField, Warning } from '@hanamaru/ui';
 import { api } from '../api.js';
 
 // 管理者のログイン。二段階認証（AU-06）: 初回は認証アプリの登録、2回目以降は6桁の確認コード
@@ -48,9 +48,8 @@ function Mfa({ setup, onDone }: { setup: boolean; onDone: () => void }) {
   };
 
   return (
-    <main className="app-main narrow">
+    <AuthFrame title="二段階認証" description={setup ? undefined : '認証アプリに表示されている6桁の確認コードを入力してください。'}>
       <form className="stack-lg" onSubmit={submit} noValidate>
-        <h1>二段階認証</h1>
         {setup && !secret && (
           <div className="stack">
             <Notice>管理画面では、パスワードに加えて認証アプリ（Google Authenticator など）の確認コードを使います。最初に認証アプリを登録してください。</Notice>
@@ -62,7 +61,7 @@ function Mfa({ setup, onDone }: { setup: boolean; onDone: () => void }) {
         {setup && secret && (
           <div className="stack">
             <p>認証アプリで「セットアップキーを入力」を選び、次のキーを入力してください。スマホでこの画面を開いている場合は、下のリンクから登録できます。</p>
-            <p className="card num" style={{ fontSize: 20, letterSpacing: 2, wordBreak: 'break-all' }}>
+            <p className="secret-key num">
               {secret.secret.replace(/(.{4})/g, '$1 ').trim()}
             </p>
             <a className="btn btn-secondary btn-block" href={secret.uri}>
@@ -87,6 +86,6 @@ function Mfa({ setup, onDone }: { setup: boolean; onDone: () => void }) {
           </div>
         )}
       </form>
-    </main>
+    </AuthFrame>
   );
 }

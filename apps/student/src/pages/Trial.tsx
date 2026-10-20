@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Button, ConfirmDialog, Notice, TextArea, TextField, Turnstile, Warning, fieldErrors, fmtDate, fmtTimeRange, useLoad } from '@hanamaru/ui';
+import { Button, ConfirmDialog, Notice, TextArea, TextField, Turnstile, Warning, fieldErrors, fmtDate, fmtTimeRange, useLoad, AuthFrame, IconCheckCircle, IconChevronRight } from '@hanamaru/ui';
 import { api, TURNSTILE_SITE_KEY } from '../api.js';
 
 // 体験レッスン（3.7）。ログインなしで使う。
@@ -62,20 +62,21 @@ export function Trial() {
 
   if (done) {
     return (
-      <main className="app-main narrow">
-        <div className="stack">
-          <h1>{done === 'booked' ? 'ご予約が確定しました' : 'お申込を受け付けました'}</h1>
+      <AuthFrame title={done === 'booked' ? 'ご予約が確定しました' : 'お申込を受け付けました'}>
+        <div className="done">
+          <span className="empty-icon" aria-hidden="true">
+            <IconCheckCircle />
+          </span>
           <p>{done === 'booked' ? '確認のメールをお送りしました。当日お待ちしています。' : '日時を調整のうえ、教室からメールでご連絡します。'}</p>
         </div>
-      </main>
+      </AuthFrame>
     );
   }
 
   const available = slots.data ?? null;
   return (
-    <main className="app-main narrow">
+    <AuthFrame title="体験レッスンのお申込" description="お申込は無料です。内容を確認のうえ、教室からご連絡します。" links={<a href="/login">生徒の方はこちら（ログイン）</a>}>
       <form className="stack-lg" onSubmit={submit} noValidate>
-        <h1>体験レッスンのお申込</h1>
         {error && <Warning title={error} />}
         <div className="stack">
           <TextField label="お名前" autoComplete="name" value={form.name} error={errors.name} onChange={set('name')} />
@@ -87,19 +88,19 @@ export function Trial() {
         {available && available.length > 0 ? (
           <section className="stack">
             <h2>体験レッスンの枠から選ぶ</h2>
-            <ul className="list">
+            <ul className="stack-sm reservation-list">
               {available.map((s) => (
                 <li key={s.teacherId + s.startsAt}>
                   <button type="button" className="choice" onClick={() => validate() && setPicked(s)}>
-                    <span>
-                      <strong>
+                    <span className="list-row-main">
+                      <span className="list-title num">
                         {fmtDate(s.startsAt)} {fmtTimeRange(s.startsAt, s.endsAt)}
-                      </strong>
-                      <br />
-                      <span className="small">
+                      </span>
+                      <span className="list-meta">
                         {s.teacherName}・{s.lessonTypeName}
                       </span>
                     </span>
+                    <IconChevronRight className="muted" />
                   </button>
                 </li>
               ))}
@@ -127,15 +128,24 @@ export function Trial() {
         onConfirm={() => void send(picked)}
       >
         {picked && (
-          <p>
-            <strong>
-              {fmtDate(picked.startsAt)} {fmtTimeRange(picked.startsAt, picked.endsAt)}
-            </strong>
-            <br />
-            {picked.teacherName}・{picked.lessonTypeName}
-          </p>
+          <dl className="summary">
+            <div>
+              <dt>日時</dt>
+              <dd className="num">
+                {fmtDate(picked.startsAt)} {fmtTimeRange(picked.startsAt, picked.endsAt)}
+              </dd>
+            </div>
+            <div>
+              <dt>講師</dt>
+              <dd>{picked.teacherName}</dd>
+            </div>
+            <div>
+              <dt>レッスン</dt>
+              <dd>{picked.lessonTypeName}</dd>
+            </div>
+          </dl>
         )}
       </ConfirmDialog>
-    </main>
+    </AuthFrame>
   );
 }

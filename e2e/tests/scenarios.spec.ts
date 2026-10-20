@@ -1,5 +1,5 @@
 import { devices, expect, test, type Browser, type Page } from '@playwright/test';
-import { MANAGE, STAFF, STUDENT, login, loginAdmin, mails, runJobs, setClock } from './helpers.js';
+import { MANAGE, STAFF, STUDENT, adminNav, login, loginAdmin, mails, runJobs, setClock } from './helpers.js';
 
 // 3章の流れを、管理者・生徒・講師の画面をまたいで通す。
 // 前のテストで作ったデータを次のテストで使うので、この順番で1つずつ流す。
@@ -45,7 +45,7 @@ async function remaining(page: Page) {
 
 async function adminSetting(browser: Browser, label: string, on: boolean) {
   const a = await adminPage(browser);
-  await a.getByRole('navigation').getByRole('link', { name: '設定', exact: true }).click();
+  await adminNav(a, '設定');
   const box = a.getByLabel(label);
   if ((await box.isChecked()) !== on) {
     await box.setChecked(on);
@@ -57,7 +57,7 @@ async function adminSetting(browser: Browser, label: string, on: boolean) {
 
 test('ST-01 / AU-03 / PY-01〜05 / SR-02 / OP-04 / MB-03 / UI-12 管理者が登録し、招待メールから入会して回数が付く', async ({ browser }) => {
   const admin = await adminPage(browser);
-  await admin.getByRole('navigation').getByRole('link', { name: '生徒', exact: true }).click();
+  await adminNav(admin, '生徒');
   await admin.getByRole('button', { name: '生徒を登録' }).click();
   await admin.getByLabel('生徒の名前').fill(NAME);
   await admin.getByLabel('ログインメール（保護者または本人）').fill(EMAIL);
@@ -125,11 +125,12 @@ test('RS-06 承認制のときは仮予約になり、管理者が承認する�
   await expect(s.locator('.badge', { hasText: '仮予約' })).toBeVisible();
 
   const a = await adminPage(browser);
-  await a.getByRole('navigation').getByRole('link', { name: '予約', exact: true }).click();
+  await adminNav(a, '予約');
   for (let i = 0; i < 4; i++) {
-    await a.locator('section.card h2').first().or(a.getByText('この週の予約はありません')).waitFor();
+    await a.waitForLoadState('networkidle');
+    await a.locator('section.panel h2').first().or(a.getByText('この週の予約はありません')).waitFor();
     if (await a.getByRole('button', { name: '承認', exact: true }).isVisible()) break;
-    await a.getByRole('button', { name: '次の週 →' }).click();
+    await a.getByRole('button', { name: '次の週' }).click();
   }
   await a.getByRole('button', { name: '承認', exact: true }).click();
   await expect(a.getByText('承認しました')).toBeVisible();
@@ -205,7 +206,7 @@ test('AV-04 休講日を設定すると、その日の予約は教室都合で�
   const date = `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
   const a = await adminPage(browser);
-  await a.getByRole('navigation').getByRole('link', { name: '休講', exact: true }).click();
+  await adminNav(a, '休講');
   await a.getByLabel('日付').fill(date);
   await a.getByLabel('理由').fill('通しテスト');
   await a.getByRole('main').getByRole('button', { name: '休講にする' }).first().click();
@@ -222,7 +223,7 @@ test('AV-04 休講日を設定すると、その日の予約は教室都合で�
 
 test('RS-07 管理者が毎週の繰り返し予約を作ると、各回が生徒の予約一覧に出る', async ({ browser }) => {
   const a = await adminPage(browser);
-  await a.getByRole('navigation').getByRole('link', { name: '予約', exact: true }).click();
+  await adminNav(a, '予約');
   await a.getByRole('button', { name: '繰り返し予約' }).click();
   await a.getByLabel('生徒', { exact: true }).selectOption({ label: NAME });
   await a.getByLabel('担当講師').selectOption({ label: '見本 花子' });
@@ -256,7 +257,7 @@ test('SR-04 / SR-05 講師がレッスン記録を書くと、管理者と担当
   await expect(t.getByText('記録を保存しました')).toBeVisible();
 
   const a = await adminPage(browser);
-  await a.getByRole('navigation').getByRole('link', { name: '生徒', exact: true }).click();
+  await adminNav(a, '生徒');
   await a.getByRole('cell').getByRole('link', { name: NAME, exact: true }).click();
   await expect(a.getByText('通しテストの記録: ハノン1番')).toBeVisible();
   await a.context().close();
@@ -293,7 +294,7 @@ test('ST-02 / UI-16 自己登録は入力の誤りを欄の下に出し、登録
   await expect(v.getByRole('link', { name: '入会手続きへ進む' })).toBeVisible();
 
   const a = await adminPage(browser);
-  await a.getByRole('navigation').getByRole('link', { name: '生徒', exact: true }).click();
+  await adminNav(a, '生徒');
   await a.getByRole('button', { name: '承認待ち' }).click();
   await a.getByRole('cell').getByRole('link', { name: '自己 登録', exact: true }).click();
   await a.getByRole('button', { name: '登録を承認する' }).click();
@@ -316,7 +317,7 @@ test('TR-02 体験枠を公開すると誰でも予約でき、管理者の画�
   await v.getByRole('dialog').getByRole('button', { name: '予約する' }).click();
   await expect(v.getByRole('heading', { name: 'ご予約が確定しました' })).toBeVisible();
   const a = await adminPage(browser);
-  await a.getByRole('navigation').getByRole('link', { name: '体験', exact: true }).click();
+  await adminNav(a, '体験');
   await expect(a.locator('li', { hasText: '体験 通し' }).getByText('日時確定')).toBeVisible();
   await a.context().close();
   await v.context().close();
@@ -340,7 +341,7 @@ test('TR-01 体験の申込に、管理者が枠を押さえて連絡する', as
   const date = d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
 
   const a = await adminPage(browser);
-  await a.getByRole('navigation').getByRole('link', { name: '体験', exact: true }).click();
+  await adminNav(a, '体験');
   const item = a.locator('li', { hasText: '体験 申込' });
   await item.getByRole('button', { name: '枠を押さえる' }).click();
   await item.getByLabel('講師').selectOption({ label: '見本 花子' });
@@ -355,7 +356,7 @@ test('TR-01 体験の申込に、管理者が枠を押さえて連絡する', as
 test('ST-03 招待コードで登録でき、無効なコードは拒否される', async ({ browser }) => {
   await adminSetting(browser, '招待コードでの登録を受け付ける', true);
   const a = await adminPage(browser);
-  await a.getByRole('navigation').getByRole('link', { name: '設定', exact: true }).click();
+  await adminNav(a, '設定');
   await a.getByRole('button', { name: '招待コードを作る' }).click();
   const code = (await a.locator('strong.num').first().innerText()).trim();
   await a.context().close();
@@ -380,7 +381,7 @@ test('ST-03 招待コードで登録でき、無効なコードは拒否され�
 
 test('PY-17 / PY-15 単発の請求の入金状況が分かり、入金履歴を CSV で書き出せる', async ({ browser }) => {
   const a = await adminPage(browser);
-  await a.getByRole('navigation').getByRole('link', { name: '単発の請求', exact: true }).click();
+  await adminNav(a, '単発の請求');
   await a.getByRole('main').getByRole('button', { name: '請求を作る' }).first().click();
   await a.getByLabel('請求の名前').fill('発表会参加費');
   await a.getByLabel('金額（税込・円）').fill('3000');
@@ -406,10 +407,10 @@ test('DB-02 ダッシュボードの予約は講師別・教室別に切り替�
   await a.getByRole('button', { name: '今週' }).click();
   await a.getByRole('button', { name: '教室別' }).click();
   // 教室別では部屋の名前（指定がなければ「教室の指定なし」）でまとめる
-  await expect(a.getByRole('heading', { name: /^(レッスン室1|教室の指定なし)（\d+件）$/ }).first()).toBeVisible();
-  await expect(a.getByRole('heading', { name: /^見本 花子（/ })).toHaveCount(0);
+  await expect(a.getByRole('heading', { name: /^(レッスン室1|教室の指定なし)\s*\d+件$/ }).first()).toBeVisible();
+  await expect(a.getByRole('heading', { name: /^見本 花子\s*\d+件$/ })).toHaveCount(0);
   await a.getByRole('button', { name: '講師別' }).click();
-  await expect(a.getByRole('heading', { name: /^見本 花子（\d+件）$/ })).toBeVisible();
+  await expect(a.getByRole('heading', { name: /^見本 花子\s*\d+件$/ })).toBeVisible();
   await a.context().close();
 });
 
@@ -422,7 +423,7 @@ test('3.4 / PY-07 / PY-09 / PY-10 月が変わると請求が並び、猶予を�
     expect((await runJobs()).filter((j) => j.error)).toEqual([]);
 
     const a = await adminPage(browser);
-    await a.getByRole('navigation').getByRole('link', { name: '入金', exact: true }).click();
+    await adminNav(a, '入金');
     await a.getByRole('heading', { name: '入金状況' }).waitFor();
     await a.getByLabel('対象月').fill(ym);
     await a.getByLabel('未払い・決済失敗だけ').check();
@@ -441,14 +442,14 @@ test('3.4 / PY-07 / PY-09 / PY-10 月が変わると請求が並び、猶予を�
     await expect(p.getByRole('button', { name: '予約する' })).toBeDisabled();
 
     // 現金で入金済みにすると、記録が残り、予約できる状態に戻る（PY-06）
-    await a.getByRole('navigation').getByRole('link', { name: '入金', exact: true }).click();
+    await adminNav(a, '入金');
     await a.getByRole('heading', { name: '入金状況' }).waitFor();
     await a.getByLabel('対象月').fill(ym);
     await a.locator('tr', { hasText: '山田 太郎' }).getByRole('button', { name: '現金で入金済み' }).click();
     await expect(a.getByText('山田 太郎さんを入金済みにしました')).toBeVisible();
     await p.reload();
     await expect(p.getByText('お支払いが確認できていない')).toHaveCount(0);
-    await a.getByRole('navigation').getByRole('link', { name: '操作記録', exact: true }).click();
+    await adminNav(a, '操作記録');
     await expect(a.getByText('現金の入金記録').first()).toBeVisible();
     await p.context().close();
     await a.context().close();

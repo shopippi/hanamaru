@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Notice, Warning } from '@hanamaru/ui';
+import { Button, IconPlus, Notice, Warning } from '@hanamaru/ui';
 
 // アプリ内ブラウザの案内（MB-05）と、ホーム画面への追加の案内（PW-03、MB-06）
 
@@ -54,7 +54,7 @@ export function AddToHomeGuide() {
     }
   };
   return (
-    <Notice icon="＋">
+    <Notice icon={<IconPlus />}>
       <div className="stack">
         <p>
           <strong>ホーム画面に追加すると、アプリのようにすぐ開けます。</strong>

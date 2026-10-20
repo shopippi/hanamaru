@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { MANAGE, STAFF, login, loginAdmin } from './helpers.js';
+import { MANAGE, STAFF, adminNav, login, loginAdmin } from './helpers.js';
 
 test('AU-01 講師のアカウントは管理画面に入れない', async ({ page }) => {
   await login(page, MANAGE, 'teacher@example.test');
@@ -32,7 +32,7 @@ test('AU-06 / DB-01 管理者は二段階認証のあとダッシュボードを
 
 test('3.8 設定を変えて保存できる', async ({ page }) => {
   await loginAdmin(page);
-  await page.getByRole('link', { name: '設定' }).click();
+  await adminNav(page, '設定');
   const box = page.getByLabel('予約を管理者の承認制にする（承認まで「仮予約」）');
   const was = await box.isChecked();
   await box.setChecked(!was);

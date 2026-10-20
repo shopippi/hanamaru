@@ -34,7 +34,12 @@ export function Enroll() {
 
   return (
     <div className="stack">
-      <h1>入会手続き</h1>
+      <div className="page-header" style={{ marginBottom: 0 }}>
+        <div className="page-header-text">
+          <h1>入会手続き</h1>
+          <p>入会セットとお支払い方法を選んでください。お支払いが済むと予約できます。</p>
+        </div>
+      </div>
       <InAppBrowserNotice />
       {cancelled && <Notice>お支払いは完了していません。もう一度お手続きください。</Notice>}
       <Loadable state={state} reload={reload} skeleton={<Skeleton block />}>
@@ -55,12 +60,15 @@ export function Enroll() {
                 {o.packages.map((p) => (
                   <label key={p.id} className="choice">
                     <input type="radio" name="package" value={p.id} checked={selected?.id === p.id} onChange={() => setPackageId(p.id)} />
-                    <span>
-                      {p.name}
-                      <br />
-                      <span className="small">
-                        入会金 {fmtYen(p.admissionFee)}＋レッスン{p.lessonCount}回 {fmtYen(p.lessonsPrice)}＝<strong>{fmtYen(p.total)}</strong>（税込）
+                    <span className="list-row-main">
+                      <span className="list-title">{p.name}</span>
+                      <span className="list-meta">
+                        入会金 {fmtYen(p.admissionFee)}＋レッスン{p.lessonCount}回 {fmtYen(p.lessonsPrice)}
                       </span>
+                    </span>
+                    <span className="choice-price num">
+                      {fmtYen(p.total)}
+                      <small>税込</small>
                     </span>
                   </label>
                 ))}

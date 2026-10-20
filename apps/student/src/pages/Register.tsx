@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Button, Loadable, Notice, Skeleton, TextField, Turnstile, Warning, fieldErrors, useLoad } from '@hanamaru/ui';
+import { Button, Loadable, Notice, Skeleton, TextField, Turnstile, Warning, fieldErrors, useLoad, AuthFrame, IconCheckCircle } from '@hanamaru/ui';
 import { api, TURNSTILE_SITE_KEY } from '../api.js';
 
 // 自己登録（ST-02）と招待コードでの登録（ST-03）。OFF のときは登録画面を出さない
@@ -38,16 +38,14 @@ export function Register() {
   };
 
   return (
-    <main className="app-main narrow">
-      <div className="stack-lg">
-        <h1>新規登録</h1>
+    <AuthFrame title="新規登録" description="生徒（保護者）のアカウントを作ります。" links={<a href="/login">ログイン画面へ戻る</a>}>
         <Loadable state={state} reload={reload} skeleton={<Skeleton lines={6} />}>
           {(opt) =>
             !opt.enabled ? (
               <Notice>登録は教室で受け付けています。教室にお問い合わせください。</Notice>
             ) : done ? (
               <div className="stack">
-                <Notice icon="✓">登録しました。教室で確認したあと、予約できるようになります。</Notice>
+                <Notice icon={<IconCheckCircle />}>登録しました。教室で確認したあと、予約できるようになります。</Notice>
                 <a className="btn btn-primary btn-block" href="/login">
                   ログイン画面へ
                 </a>
@@ -71,7 +69,6 @@ export function Register() {
             )
           }
         </Loadable>
-      </div>
-    </main>
+    </AuthFrame>
   );
 }

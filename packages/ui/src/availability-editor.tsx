@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Button, ConfirmDialog, Empty, Loadable, Notice, Skeleton, Warning, useToast } from './components.js';
+import { Button, ConfirmDialog, Empty, Loadable, Notice, Panel, Skeleton, Warning, useToast } from './components.js';
+import { IconClock, IconPlus } from './icons.js';
 import { fmtDateKey, fmtDateTime, WEEKDAY_LABELS } from './format.js';
 import { useAction, useLoad } from './hooks.js';
 
@@ -89,11 +90,28 @@ export function AvailabilityEditor({
         const update = (i: number, patch: Partial<AvRule>) => setRules(current.map((r, j) => (j === i ? { ...r, ...patch } : r)));
         return (
           <div className="stack-lg">
-            <section className="stack">
-              <h2>曜日ごとの空き時間</h2>
-              {current.length === 0 && <Empty message="空き時間がありません。「時間帯を足す」から追加してください。" />}
+            <Panel
+              title="曜日ごとの空き時間"
+              flush
+              footer={
+                <>
+                  <Button
+                    variant="secondary"
+                    disabled={types.length === 0}
+                    onClick={() => setRules([...current, { weekday: 1, startTime: '15:00', endTime: '18:00', lessonTypeId: types[0]?.id ?? '', roomId: null, forTrial: false }])}
+                  >
+                    <IconPlus size={18} />
+                    時間帯を足す
+                  </Button>
+                  <Button onClick={() => void submit.run({ rules: current }, false)} pending={submit.pending} disabled={rules === null}>
+                    保存する
+                  </Button>
+                </>
+              }
+            >
+              {current.length === 0 && <Empty icon={<IconClock />} message="空き時間がありません" text="「時間帯を足す」から追加してください。" />}
               {current.map((r, i) => (
-                <div key={i} className="card stack">
+                <div key={i} className="rule-row">
                   <div className="row">
                     <label className="visually-hidden" htmlFor={`wd-${i}`}>
                       曜日
@@ -133,25 +151,13 @@ export function AvailabilityEditor({
                       </label>
                     )}
                     {!allowTrial && r.forTrial && <span className="badge">体験専用</span>}
-                    <Button variant="ghost" onClick={() => setRules(current.filter((_, j) => j !== i))}>
+                    <Button variant="quiet" onClick={() => setRules(current.filter((_, j) => j !== i))}>
                       削除
                     </Button>
                   </div>
                 </div>
               ))}
-              <div className="row">
-                <Button
-                  variant="secondary"
-                  disabled={types.length === 0}
-                  onClick={() => setRules([...current, { weekday: 1, startTime: '15:00', endTime: '18:00', lessonTypeId: types[0]?.id ?? '', roomId: null, forTrial: false }])}
-                >
-                  時間帯を足す
-                </Button>
-                <Button onClick={() => void submit.run({ rules: current }, false)} pending={submit.pending} disabled={rules === null}>
-                  保存する
-                </Button>
-              </div>
-            </section>
+            </Panel>
             <ExceptionSection data={data} types={types} onSubmit={(c) => void submit.run(c, false)} pending={submit.pending} />
             <ConfirmDialog
               open={!!pendingChange}
@@ -217,24 +223,27 @@ function ExceptionSection({
     });
   };
   return (
-    <section className="stack">
-      <h2>日付ごとの例外</h2>
-      <Notice>お休みの日（不在）や、その日だけ空いている時間を設定します。</Notice>
+    <Panel title="日付ごとの例外" flush>
+      <div className="panel-body">
+        <Notice>お休みの日（不在）や、その日だけ空いている時間を設定します。</Notice>
+      </div>
       {data.exceptions.length > 0 && (
-        <ul className="list">
+        <ul className="list panel-divider">
           {data.exceptions.map((e) => (
             <li key={e.id} className="spread">
-              <span>
-                {fmtDateKey(e.date)}　{e.kind === 'block' ? '不在' : '追加'}　{e.startTime ? `${e.startTime}〜${e.endTime}` : '終日'}
+              <span className="row-tight" style={{ alignItems: 'center' }}>
+                <strong className="num">{fmtDateKey(e.date)}</strong>
+                <span className={e.kind === 'block' ? 'badge badge-strong' : 'badge'}>{e.kind === 'block' ? '不在' : '追加'}</span>
+                <span className="num secondary">{e.startTime ? `${e.startTime}〜${e.endTime}` : '終日'}</span>
               </span>
-              <Button variant="ghost" onClick={() => onSubmit({ removeExceptionIds: [e.id!] })}>
+              <Button variant="quiet" onClick={() => onSubmit({ removeExceptionIds: [e.id!] })}>
                 削除
               </Button>
             </li>
           ))}
         </ul>
       )}
-      <div className="card stack">
+      <div className="panel-body panel-divider stack">
         <div className="row">
           <label className="field-label" htmlFor="ex-date" style={{ margin: 0 }}>
             日付
@@ -270,10 +279,13 @@ function ExceptionSection({
             )}
           </div>
         )}
-        <Button variant="secondary" onClick={add} disabled={!date} pending={pending}>
-          例外を追加する
-        </Button>
+        <div>
+          <Button variant="secondary" onClick={add} disabled={!date} pending={pending}>
+            <IconPlus size={18} />
+            例外を追加する
+          </Button>
+        </div>
       </div>
-    </section>
+    </Panel>
   );
 }

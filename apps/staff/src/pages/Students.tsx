@@ -1,6 +1,23 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Button, Empty, Loadable, Skeleton, TextArea, fmtDateTime, useAction, useLoad, useToast } from '@hanamaru/ui';
+import {
+  Button,
+  Empty,
+  IconBook,
+  IconChevronRight,
+  IconMail,
+  IconPhone,
+  IconUsers,
+  Loadable,
+  PageHeader,
+  Panel,
+  Skeleton,
+  TextArea,
+  fmtDateTime,
+  useAction,
+  useLoad,
+  useToast,
+} from '@hanamaru/ui';
 import { api, type StudentDetail } from '../api.js';
 
 // 担当生徒（SR-06: 名前・電話・メール・講師用備考・レッスン記録だけ）
@@ -8,23 +25,31 @@ import { api, type StudentDetail } from '../api.js';
 export function Students() {
   const { state, reload } = useLoad(() => api.get<{ id: string; name: string; status: string }[]>('/students'), []);
   return (
-    <div className="stack">
-      <h1>担当生徒</h1>
+    <div>
+      <PageHeader title="担当生徒" description="連絡先・講師用備考・これまでのレッスン記録を確認できます。" />
       <Loadable state={state} reload={reload} skeleton={<Skeleton lines={5} />}>
         {(list) =>
           list.length === 0 ? (
-            <Empty message="担当している生徒はいません。担当は教室が設定します。" />
+            <div className="panel">
+              <Empty icon={<IconUsers />} message="担当している生徒はいません" text="担当は教室が設定します。" />
+            </div>
           ) : (
-            <ul className="list">
-              {list.map((s) => (
-                <li key={s.id}>
-                  <Link to={`/students/${s.id}`} style={{ display: 'flex', minHeight: 44, alignItems: 'center' }}>
-                    {s.name}
-                    {s.status === 'suspended' && <span className="badge" style={{ marginLeft: 8 }}>休会中</span>}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            <div className="panel">
+              <ul className="list">
+                {list.map((s) => (
+                  <li key={s.id}>
+                    <Link className="list-row" to={`/students/${s.id}`}>
+                      <span className="avatar" aria-hidden="true">
+                        {(s.name.trim().split(/\s+/).pop() ?? s.name).slice(0, 1)}
+                      </span>
+                      <span className="list-row-main list-title">{s.name}</span>
+                      {s.status === 'suspended' && <span className="badge">休会中</span>}
+                      <IconChevronRight className="muted" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )
         }
       </Loadable>
@@ -54,40 +79,56 @@ function Detail({ s }: { s: StudentDetail }) {
     }
   });
   return (
-    <div className="stack-lg">
-      <h1>{s.name}</h1>
-      <dl className="card stack" style={{ margin: 0 }}>
-        <div>
-          <dt className="muted small">電話</dt>
-          <dd style={{ margin: 0 }}>{s.phone ? <a href={`tel:${s.phone}`}>{s.phone}</a> : '—'}</dd>
-        </div>
-        <div>
-          <dt className="muted small">メール</dt>
-          <dd style={{ margin: 0 }}>{s.email ? <a href={`mailto:${s.email}`}>{s.email}</a> : '—'}</dd>
-        </div>
-      </dl>
-      <section className="stack">
-        <TextArea label="講師用備考" hint="教室と、この生徒の担当講師全員が読み書きできます" value={note} onChange={(e) => setNote(e.target.value)} />
-        <Button variant="secondary" onClick={() => void save.run()} pending={save.pending} disabled={note === s.teacherNote}>
-          備考を保存する
-        </Button>
-      </section>
-      <section>
-        <h2>レッスン記録</h2>
-        {s.lessonRecords.length === 0 ? (
-          <Empty message="まだ記録はありません。担当レッスン一覧から書けます。" />
-        ) : (
-          <ul className="list">
-            {[...s.lessonRecords].reverse().map((r) => (
-              <li key={r.id}>
-                <strong>{fmtDateTime(r.startsAt)}</strong> <span className="small muted">{r.teacherName}</span>
-                <p style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap' }}>{r.content}</p>
-                {r.progress && <p className="small" style={{ margin: 0 }}>進み具合: {r.progress}</p>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+    <div>
+      <PageHeader
+        title={s.name}
+        back={{ to: '/students', label: '担当生徒', as: ({ to, className, children }) => <Link to={to} className={className}>{children}</Link> }}
+      />
+      <div className="stack-lg">
+        <Panel title="連絡先" flush>
+          <dl className="summary flush">
+            <div>
+              <dt>
+                <IconPhone size={16} /> 電話
+              </dt>
+              <dd>{s.phone ? <a href={`tel:${s.phone}`}>{s.phone}</a> : '—'}</dd>
+            </div>
+            <div>
+              <dt>
+                <IconMail size={16} /> メール
+              </dt>
+              <dd>{s.email ? <a href={`mailto:${s.email}`}>{s.email}</a> : '—'}</dd>
+            </div>
+          </dl>
+        </Panel>
+        <Panel
+          footer={
+            <Button variant="secondary" onClick={() => void save.run()} pending={save.pending} disabled={note === s.teacherNote}>
+              備考を保存する
+            </Button>
+          }
+        >
+          <TextArea label="講師用備考" hint="教室と、この生徒の担当講師全員が読み書きできます" value={note} onChange={(e) => setNote(e.target.value)} />
+        </Panel>
+        <Panel title="レッスン記録" flush>
+          {s.lessonRecords.length === 0 ? (
+            <Empty icon={<IconBook />} message="まだ記録はありません" text="担当レッスン一覧から書けます。" />
+          ) : (
+            <ol className="list timeline">
+              {[...s.lessonRecords].reverse().map((r) => (
+                <li key={r.id}>
+                  <p className="spread">
+                    <strong className="num">{fmtDateTime(r.startsAt)}</strong>
+                    <span className="small muted">{r.teacherName}</span>
+                  </p>
+                  <p style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{r.content}</p>
+                  {r.progress && <p className="small secondary">進み具合: {r.progress}</p>}
+                </li>
+              ))}
+            </ol>
+          )}
+        </Panel>
+      </div>
     </div>
   );
 }

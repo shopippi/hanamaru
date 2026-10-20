@@ -1,11 +1,18 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import {
   Button,
   Checkbox,
   ConfirmDialog,
   Empty,
+  IconAlert,
+  IconBook,
+  IconHistory,
+  IconReceipt,
   Loadable,
+  PageHeader,
+  Panel,
+  Stat,
   METHOD_LABEL,
   Notice,
   STUDENT_STATUS_LABEL,
@@ -43,9 +50,30 @@ interface Detail {
   teacherNote: string;
   accountEmail: string | null;
   teachers: { id: string; name: string }[];
-  lessonRecords: { id: string; startsAt: string; teacherName: string; content: string; progress: string }[];
-  creditLedger: { id: string; month: string; delta: number; reason: string; note: string; createdAt: string }[];
-  payments: { id: string; kind: string; method: string; month: string | null; amount: number; status: string; paidAt: string | null }[];
+  lessonRecords: {
+    id: string;
+    startsAt: string;
+    teacherName: string;
+    content: string;
+    progress: string;
+  }[];
+  creditLedger: {
+    id: string;
+    month: string;
+    delta: number;
+    reason: string;
+    note: string;
+    createdAt: string;
+  }[];
+  payments: {
+    id: string;
+    kind: string;
+    method: string;
+    month: string | null;
+    amount: number;
+    status: string;
+    paidAt: string | null;
+  }[];
 }
 
 const REASON: Record<string, string> = {
@@ -57,8 +85,17 @@ const REASON: Record<string, string> = {
   carryover: '繰越',
   adjust: '手動調整',
 };
-const PAY_STATUS: Record<string, string> = { pending: '未払い', succeeded: '入金済み', failed: '決済失敗', cancelled: '取消' };
-const KIND: Record<string, string> = { enrollment: '入会', monthly: '月謝', one_off: '単発' };
+const PAY_STATUS: Record<string, string> = {
+  pending: '未払い',
+  succeeded: '入金済み',
+  failed: '決済失敗',
+  cancelled: '取消',
+};
+const KIND: Record<string, string> = {
+  enrollment: '入会',
+  monthly: '月謝',
+  one_off: '単発',
+};
 
 export function StudentDetail() {
   const { id } = useParams();
@@ -69,62 +106,87 @@ export function StudentDetail() {
         api.get<Teacher[]>('/teachers'),
         api.get<Course[]>('/courses'),
         api.get<Package[]>('/packages'),
-        api.get<{ id: string; action: string; createdAt: string; details: Record<string, unknown> }[]>(`/audit-logs?targetType=student&targetId=${id}`),
+        api.get<
+          {
+            id: string;
+            action: string;
+            createdAt: string;
+            details: Record<string, unknown>;
+          }[]
+        >(`/audit-logs?targetType=student&targetId=${id}`),
       ]),
     [id],
   );
   return (
     <Loadable state={state} reload={reload} skeleton={<Skeleton lines={12} />}>
       {([d, teachers, courses, packages, logs]) => (
-        <div className="stack-lg">
-          <div>
-            <h1 style={{ marginBottom: 4 }}>{d.name}</h1>
-            <p className="muted" style={{ margin: 0 }}>
-              {STUDENT_STATUS_LABEL[d.status]}
-              {!d.approved && '・承認待ち'}
-              {d.scheduledStatus && d.scheduledStatusAt && `・${fmtDate(d.scheduledStatusAt)}から${STUDENT_STATUS_LABEL[d.scheduledStatus]}`}
-            </p>
-          </div>
-          <StatusSection d={d} onChanged={reload} />
-          <div className="grid-2">
-            <InfoSection d={d} courses={courses} onSaved={reload} />
-            <div className="stack-lg">
-              <TeachersSection d={d} teachers={teachers} onSaved={reload} />
-              <NotesSection d={d} />
+        <div>
+          <PageHeader
+            back={{
+              to: '/students',
+              label: '生徒の一覧',
+              as: ({ to, className, children }) => (
+                <Link to={to} className={className}>
+                  {children}
+                </Link>
+              ),
+            }}
+            title={d.name}
+            description={
+              <span className="row-tight">
+                <span className={d.status === 'active' ? 'badge badge-dot' : 'badge'}>{STUDENT_STATUS_LABEL[d.status]}</span>
+                {!d.approved && <span className="badge badge-strong">承認待ち</span>}
+                {d.scheduledStatus && d.scheduledStatusAt && (
+                  <span className="badge badge-muted">
+                    {fmtDate(d.scheduledStatusAt)}から
+                    {STUDENT_STATUS_LABEL[d.scheduledStatus]}
+                  </span>
+                )}
+              </span>
+            }
+          />
+          <div className="stack-lg">
+            <StatusSection d={d} onChanged={reload} />
+            <div className="grid-2">
+              <InfoSection d={d} courses={courses} onSaved={reload} />
+              <div className="stack-lg">
+                <TeachersSection d={d} teachers={teachers} onSaved={reload} />
+                <NotesSection d={d} />
+              </div>
             </div>
+            <CreditsSection d={d} onChanged={reload} />
+            <PaymentsSection d={d} packages={packages} onChanged={reload} />
+            <Panel title="レッスン記録" flush>
+              {d.lessonRecords.length === 0 ? (
+                <Empty icon={<IconBook />} message="まだ記録はありません" />
+              ) : (
+                <ul className="list">
+                  {[...d.lessonRecords].reverse().map((r) => (
+                    <li key={r.id}>
+                      <p>
+                        <strong>{fmtDateTime(r.startsAt)}</strong> <span className="small muted">{r.teacherName}</span>
+                      </p>
+                      <p style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{r.content}</p>
+                      {r.progress && <p className="small secondary">進み具合: {r.progress}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+            <Panel title="操作記録" flush>
+              {logs.length === 0 ? (
+                <Empty icon={<IconHistory />} message="操作記録はありません" />
+              ) : (
+                <ul className="list small">
+                  {logs.map((l) => (
+                    <li key={l.id}>
+                      <span className="muted num">{fmtDateTime(l.createdAt)}</span>　{l.action}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
           </div>
-          <CreditsSection d={d} onChanged={reload} />
-          <PaymentsSection d={d} packages={packages} onChanged={reload} />
-          <section className="stack">
-            <h2>レッスン記録</h2>
-            {d.lessonRecords.length === 0 ? (
-              <Empty message="まだ記録はありません" />
-            ) : (
-              <ul className="list">
-                {[...d.lessonRecords].reverse().map((r) => (
-                  <li key={r.id}>
-                    <strong>{fmtDateTime(r.startsAt)}</strong> <span className="small muted">{r.teacherName}</span>
-                    <p style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap' }}>{r.content}</p>
-                    {r.progress && <p className="small" style={{ margin: 0 }}>進み具合: {r.progress}</p>}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-          <section className="stack">
-            <h2>操作記録</h2>
-            {logs.length === 0 ? (
-              <Empty message="操作記録はありません" />
-            ) : (
-              <ul className="list small">
-                {logs.map((l) => (
-                  <li key={l.id}>
-                    {fmtDateTime(l.createdAt)}　{l.action}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
         </div>
       )}
     </Loadable>
@@ -150,38 +212,49 @@ function StatusSection({ d, onChanged }: { d: Detail; onChanged: () => void }) {
     onChanged();
   });
   return (
-    <section className="card stack">
-      <h2>状態</h2>
-      {!d.approved && (
-        <Button onClick={() => void approve.run()} pending={approve.pending}>
-          登録を承認する
-        </Button>
-      )}
-      <div className="row">
-        {(['trial', 'enrolling', 'active', 'suspended', 'withdrawn'] as const)
-          .filter((s) => s !== d.status)
-          .map((s) => (
-            <Button key={s} variant="secondary" onClick={() => setTarget(s)}>
-              {STUDENT_STATUS_LABEL[s]}にする
-            </Button>
-          ))}
-      </div>
-      <ConfirmDialog
-        open={!!target}
-        title={`${STUDENT_STATUS_LABEL[target ?? 'active']}にしますか`}
-        confirmLabel="変更する"
-        pending={change.pending}
-        onCancel={() => setTarget(null)}
-        onConfirm={() => target && void change.run(target)}
-      >
-        {(target === 'withdrawn' || target === 'suspended') && (
-          <p>
-            翌月1日から反映します。今月末までは予約でき、返金はしません。翌月から課金を止めます。
-            {target === 'withdrawn' ? '翌月になるとログインできなくなります。' : '休会中は予約できません。'}
-          </p>
+    <Panel title="状態">
+      <div className="stack">
+        {!d.approved && (
+          <div className="notice warning" role="note">
+            <span className="notice-icon" aria-hidden="true">
+              <IconAlert />
+            </span>
+            <div className="notice-body spread">
+              <p>
+                <strong>この生徒は承認待ちです</strong>
+              </p>
+              <Button onClick={() => void approve.run()} pending={approve.pending}>
+                登録を承認する
+              </Button>
+            </div>
+          </div>
         )}
-      </ConfirmDialog>
-    </section>
+        <div className="row">
+          {(['trial', 'enrolling', 'active', 'suspended', 'withdrawn'] as const)
+            .filter((s) => s !== d.status)
+            .map((s) => (
+              <Button key={s} variant="secondary" onClick={() => setTarget(s)}>
+                {STUDENT_STATUS_LABEL[s]}にする
+              </Button>
+            ))}
+        </div>
+        <ConfirmDialog
+          open={!!target}
+          title={`${STUDENT_STATUS_LABEL[target ?? 'active']}にしますか`}
+          confirmLabel="変更する"
+          pending={change.pending}
+          onCancel={() => setTarget(null)}
+          onConfirm={() => target && void change.run(target)}
+        >
+          {(target === 'withdrawn' || target === 'suspended') && (
+            <p>
+              翌月1日から反映します。今月末までは予約でき、返金はしません。翌月から課金を止めます。
+              {target === 'withdrawn' ? '翌月になるとログインできなくなります。' : '休会中は予約できません。'}
+            </p>
+          )}
+        </ConfirmDialog>
+      </div>
+    </Panel>
   );
 }
 
@@ -199,7 +272,10 @@ function InfoSection({ d, courses, onSaved }: { d: Detail; courses: Course[]; on
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const save = useAction(async () => {
     try {
-      await api.patch(`/students/${d.id}`, { ...form, courseId: form.courseId || null });
+      await api.patch(`/students/${d.id}`, {
+        ...form,
+        courseId: form.courseId || null,
+      });
       toast('保存しました');
       onSaved();
     } catch (e) {
@@ -207,33 +283,38 @@ function InfoSection({ d, courses, onSaved }: { d: Detail; courses: Course[]; on
     }
   });
   return (
-    <section className="card stack">
-      <h2>基本情報</h2>
-      <p className="small muted">ログインメール: {d.accountEmail}</p>
-      <TextField label="名前" value={form.name} onChange={set('name')} />
-      <TextField label="保護者" value={form.guardianName} onChange={set('guardianName')} />
-      <TextField label="電話番号" type="tel" inputMode="tel" value={form.phone} onChange={set('phone')} />
-      <TextField label="メール" type="email" inputMode="email" value={form.email} onChange={set('email')} />
-      <TextField label="住所" value={form.address} onChange={set('address')} />
-      <Select label="月額コース" value={form.courseId} onChange={set('courseId')}>
-        <option value="">未設定</option>
-        {courses.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </Select>
-      <Select label="支払い方法" value={form.billingMethod} onChange={set('billingMethod')}>
-        {Object.entries(METHOD_LABEL).map(([k, v]) => (
-          <option key={k} value={k}>
-            {v}
-          </option>
-        ))}
-      </Select>
-      <Button onClick={() => void save.run()} pending={save.pending}>
-        保存する
-      </Button>
-    </section>
+    <Panel
+      title="基本情報"
+      footer={
+        <Button onClick={() => void save.run()} pending={save.pending}>
+          保存する
+        </Button>
+      }
+    >
+      <div className="stack">
+        <p className="small muted">ログインメール: {d.accountEmail}</p>
+        <TextField label="名前" value={form.name} onChange={set('name')} />
+        <TextField label="保護者" value={form.guardianName} onChange={set('guardianName')} />
+        <TextField label="電話番号" type="tel" inputMode="tel" value={form.phone} onChange={set('phone')} />
+        <TextField label="メール" type="email" inputMode="email" value={form.email} onChange={set('email')} />
+        <TextField label="住所" value={form.address} onChange={set('address')} />
+        <Select label="月額コース" value={form.courseId} onChange={set('courseId')}>
+          <option value="">未設定</option>
+          {courses.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
+        <Select label="支払い方法" value={form.billingMethod} onChange={set('billingMethod')}>
+          {Object.entries(METHOD_LABEL).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
+        </Select>
+      </div>
+    </Panel>
   );
 }
 
@@ -246,16 +327,26 @@ function TeachersSection({ d, teachers, onSaved }: { d: Detail; teachers: Teache
     onSaved();
   });
   return (
-    <section className="card stack">
-      <h2>担当講師</h2>
-      <p className="small muted">担当を外しても既存の予約は残ります。新しい予約だけができなくなります。</p>
-      {teachers.map((t) => (
-        <Checkbox key={t.id} label={t.active ? t.name : `${t.name}（停止中）`} checked={ids.includes(t.id)} onChange={(e) => setIds(e.target.checked ? [...ids, t.id] : ids.filter((x) => x !== t.id))} />
-      ))}
-      <Button variant="secondary" onClick={() => void save.run()} pending={save.pending}>
-        担当講師を保存する
-      </Button>
-    </section>
+    <Panel
+      title="担当講師"
+      footer={
+        <Button variant="secondary" onClick={() => void save.run()} pending={save.pending}>
+          担当講師を保存する
+        </Button>
+      }
+    >
+      <div className="stack-sm">
+        <p className="small muted">担当を外しても既存の予約は残ります。新しい予約だけができなくなります。</p>
+        {teachers.map((t) => (
+          <Checkbox
+            key={t.id}
+            label={t.active ? t.name : `${t.name}（停止中）`}
+            checked={ids.includes(t.id)}
+            onChange={(e) => setIds(e.target.checked ? [...ids, t.id] : ids.filter((x) => x !== t.id))}
+          />
+        ))}
+      </div>
+    </Panel>
   );
 }
 
@@ -269,14 +360,19 @@ function NotesSection({ d }: { d: Detail }) {
     toast('備考を保存しました');
   });
   return (
-    <section className="card stack">
-      <h2>備考</h2>
-      <TextArea label="管理用備考" hint="講師には表示されません" value={admin} onChange={(e) => setAdmin(e.target.value)} />
-      <TextArea label="講師用備考" hint="担当講師全員が読み書きできます" value={teacher} onChange={(e) => setTeacher(e.target.value)} />
-      <Button variant="secondary" onClick={() => void save.run()} pending={save.pending}>
-        備考を保存する
-      </Button>
-    </section>
+    <Panel
+      title="備考"
+      footer={
+        <Button variant="secondary" onClick={() => void save.run()} pending={save.pending}>
+          備考を保存する
+        </Button>
+      }
+    >
+      <div className="stack">
+        <TextArea label="管理用備考" hint="講師には表示されません" value={admin} onChange={(e) => setAdmin(e.target.value)} />
+        <TextArea label="講師用備考" hint="担当講師全員が読み書きできます" value={teacher} onChange={(e) => setTeacher(e.target.value)} />
+      </div>
+    </Panel>
   );
 }
 
@@ -289,7 +385,11 @@ function CreditsSection({ d, onChanged }: { d: Detail; onChanged: () => void }) 
   const [note, setNote] = useState('');
   const adjust = useAction(async () => {
     try {
-      await api.post(`/students/${d.id}/credits`, { month, delta: Number(delta), note });
+      await api.post(`/students/${d.id}/credits`, {
+        month,
+        delta: Number(delta),
+        note,
+      });
       toast('回数を調整しました');
       setNote('');
       onChanged();
@@ -298,21 +398,23 @@ function CreditsSection({ d, onChanged }: { d: Detail; onChanged: () => void }) 
     }
   });
   return (
-    <section className="stack">
-      <h2>回数</h2>
-      <div className="grid">
-        {[...byMonth].sort().reverse().slice(0, 4).map(([m, n]) => (
-          <div key={m} className="card">
-            <p className="card-title">{fmtMonth(m)}の残り</p>
-            <p className="big-number num" style={{ margin: 0 }}>
-              {n}
-              <small>回</small>
-            </p>
-          </div>
-        ))}
+    <section className="stack" aria-labelledby="credits-title">
+      <div className="section-title">
+        <h2 id="credits-title">回数</h2>
+      </div>
+      <div className="stat-grid">
+        {[...byMonth]
+          .sort()
+          .reverse()
+          .slice(0, 4)
+          .map(([m, n]) => (
+            <div key={m} className="card stat">
+              <Stat label={`${fmtMonth(m)}の残り`} value={n} unit="回" />
+            </div>
+          ))}
       </div>
       <details>
-        <summary style={{ minHeight: 44, display: 'flex', alignItems: 'center', cursor: 'pointer' }}>回数の履歴（{d.creditLedger.length}件）</summary>
+        <summary>回数の履歴（{d.creditLedger.length}件）</summary>
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -329,7 +431,9 @@ function CreditsSection({ d, onChanged }: { d: Detail; onChanged: () => void }) 
                 <tr key={l.id}>
                   <td>{fmtDateTime(l.createdAt)}</td>
                   <td>{fmtMonth(l.month)}</td>
-                  <td className="num">{l.delta > 0 ? `+${l.delta}` : l.delta}</td>
+                  <td className="num">
+                    <strong>{l.delta > 0 ? `+${l.delta}` : l.delta}</strong>
+                  </td>
                   <td>{REASON[l.reason] ?? l.reason}</td>
                   <td>{l.note}</td>
                 </tr>
@@ -338,17 +442,22 @@ function CreditsSection({ d, onChanged }: { d: Detail; onChanged: () => void }) 
           </table>
         </div>
       </details>
-      <div className="card stack">
-        <h3>回数の手動調整</h3>
-        <div className="row">
-          <input aria-label="対象月" type="month" className="input" style={{ width: 'auto' }} value={month} onChange={(e) => setMonth(e.target.value)} />
-          <input aria-label="増減する回数" type="number" className="input" style={{ width: 96 }} value={delta} onChange={(e) => setDelta(e.target.value)} />
+      <Panel
+        title="回数の手動調整"
+        footer={
+          <Button variant="secondary" onClick={() => void adjust.run()} pending={adjust.pending} disabled={!note.trim() || !Number(delta)}>
+            調整する
+          </Button>
+        }
+      >
+        <div className="stack">
+          <div className="row">
+            <input aria-label="対象月" type="month" className="input" style={{ width: 'auto' }} value={month} onChange={(e) => setMonth(e.target.value)} />
+            <input aria-label="増減する回数" type="number" className="input" style={{ width: 96 }} value={delta} onChange={(e) => setDelta(e.target.value)} />
+          </div>
+          <TextField label="理由" hint="履歴に残ります（例: 振替レッスン分）" value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
-        <TextField label="理由" hint="履歴に残ります（例: 振替レッスン分）" value={note} onChange={(e) => setNote(e.target.value)} />
-        <Button variant="secondary" onClick={() => void adjust.run()} pending={adjust.pending} disabled={!note.trim() || !Number(delta)}>
-          調整する
-        </Button>
-      </div>
+      </Panel>
     </section>
   );
 }
@@ -376,10 +485,14 @@ function PaymentsSection({ d, packages, onChanged }: { d: Detail; packages: Pack
     }
   });
   return (
-    <section className="stack">
-      <h2>入金</h2>
+    <section className="stack" aria-labelledby="payments-title">
+      <div className="section-title">
+        <h2 id="payments-title">入金</h2>
+      </div>
       {d.payments.length === 0 ? (
-        <Empty message="入金の記録はありません" />
+        <div className="panel">
+          <Empty icon={<IconReceipt />} message="入金の記録はありません" />
+        </div>
       ) : (
         <div className="table-wrap">
           <table className="table">
@@ -397,11 +510,20 @@ function PaymentsSection({ d, packages, onChanged }: { d: Detail; packages: Pack
               {d.payments.map((p) => (
                 <tr key={p.id}>
                   <td>{KIND[p.kind]}</td>
-                  <td>{p.month ? fmtMonth(p.month) : '—'}</td>
+                  <td>{p.month ? fmtMonth(p.month) : <span className="muted">—</span>}</td>
                   <td>{METHOD_LABEL[p.method]}</td>
                   <td className="num">{fmtYen(p.amount)}</td>
-                  <td>{p.status === 'failed' ? <strong>⚠ {PAY_STATUS[p.status]}</strong> : PAY_STATUS[p.status]}</td>
-                  <td>{p.paidAt ? fmtDateTime(p.paidAt) : '—'}</td>
+                  <td>
+                    {p.status === 'failed' ? (
+                      <span className="badge badge-strong">
+                        <IconAlert size={14} />
+                        {PAY_STATUS[p.status]}
+                      </span>
+                    ) : (
+                      PAY_STATUS[p.status]
+                    )}
+                  </td>
+                  <td>{p.paidAt ? fmtDateTime(p.paidAt) : <span className="muted">—</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -409,16 +531,25 @@ function PaymentsSection({ d, packages, onChanged }: { d: Detail; packages: Pack
         </div>
       )}
       <div className="grid-2">
-        <div className="card stack">
-          <h3>月謝を現金で受け取った</h3>
+        <Panel
+          title="月謝を現金で受け取った"
+          footer={
+            <Button variant="secondary" onClick={() => void cash.run()} pending={cash.pending}>
+              入金済みにする
+            </Button>
+          }
+        >
           <input aria-label="対象月" type="month" className="input" value={month} onChange={(e) => setMonth(e.target.value)} />
-          <Button variant="secondary" onClick={() => void cash.run()} pending={cash.pending}>
-            入金済みにする
-          </Button>
-        </div>
+        </Panel>
         {d.status === 'enrolling' && (
-          <div className="card stack">
-            <h3>入会セットを現金で受け取った</h3>
+          <Panel
+            title="入会セットを現金で受け取った"
+            footer={
+              <Button variant="secondary" onClick={() => void enrollCash.run()} pending={enrollCash.pending} disabled={!pkg}>
+                入金済みにする
+              </Button>
+            }
+          >
             <Select label="入会セット" value={pkg} onChange={(e) => setPkg(e.target.value)}>
               {packages.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -426,10 +557,7 @@ function PaymentsSection({ d, packages, onChanged }: { d: Detail; packages: Pack
                 </option>
               ))}
             </Select>
-            <Button variant="secondary" onClick={() => void enrollCash.run()} pending={enrollCash.pending} disabled={!pkg}>
-              入金済みにする
-            </Button>
-          </div>
+          </Panel>
         )}
       </div>
       <Notice>入金済みにすると、日時・金額・方法「現金」・操作した人が記録されます。</Notice>

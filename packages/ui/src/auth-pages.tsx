@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { ApiError, fieldErrors, type Api } from './api.js';
 import { Button, Notice, TextField, Warning } from './components.js';
+import { LogoMark } from './icons.js';
 
 // ログイン・パスワード再設定・招待（3.1、ST-01）。3つのポータルで共通の画面
 
@@ -33,13 +34,20 @@ export function Turnstile({ siteKey, onToken }: { siteKey: string | undefined; o
   return siteKey ? <div ref={ref} /> : null;
 }
 
-function AuthFrame({ title, children }: { title: string; children: ReactNode }) {
+/** ログインなどの1枚の画面。中央の枠に、教室のマークと見出しを置く */
+export function AuthFrame({ title, description, children, links }: { title: string; description?: ReactNode; children: ReactNode; links?: ReactNode }) {
   return (
-    <main className="app-main narrow">
-      <div className="stack-lg">
+    <main className="auth">
+      <a className="auth-brand" href="/">
+        <LogoMark size={30} />
+        はなまる音楽教室
+      </a>
+      <div className="auth-card">
         <h1>{title}</h1>
-        {children}
+        {description && <p className="auth-description">{description}</p>}
+        <div className="stack-lg">{children}</div>
       </div>
+      {links && <div className="auth-links">{links}</div>}
     </main>
   );
 }
@@ -75,7 +83,15 @@ export function LoginPage({
   };
 
   return (
-    <AuthFrame title={title}>
+    <AuthFrame
+      title={title}
+      links={
+        <>
+          <a href="/reset-password">パスワードを忘れた方</a>
+          {footer}
+        </>
+      }
+    >
       <form className="stack" onSubmit={submit} noValidate>
         {error && <Warning title={error} />}
         <TextField
@@ -100,10 +116,6 @@ export function LoginPage({
           ログイン
         </Button>
       </form>
-      <p>
-        <a href="/reset-password">パスワードを忘れた方</a>
-      </p>
-      {footer}
     </AuthFrame>
   );
 }
@@ -142,9 +154,8 @@ export function ResetRequestPage({ api, captchaSiteKey }: { api: Api; captchaSit
     );
   }
   return (
-    <AuthFrame title="パスワードの再設定">
+    <AuthFrame title="パスワードの再設定" description="登録したメールアドレスを入力してください。再設定のリンクをお送りします。" links={<a href="/login">ログイン画面へ戻る</a>}>
       <form className="stack" onSubmit={submit} noValidate>
-        <p>登録したメールアドレスを入力してください。再設定のリンクをお送りします。</p>
         {error && <Warning title={error} />}
         <TextField
           label="メールアドレス"

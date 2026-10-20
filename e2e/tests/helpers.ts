@@ -49,3 +49,10 @@ export async function runJobs() {
   const r = await fetch(`${API}/dev/jobs`, { method: 'POST' });
   return r.json() as Promise<{ name: string; error?: string }[]>;
 }
+
+/** 管理画面のメニューから移動する（スマホの幅では引き出しを開いてから） */
+export async function adminNav(page: Page, name: string) {
+  const menu = page.getByRole('button', { name: 'メニューを開く' });
+  if (await menu.isVisible()) await menu.click();
+  await page.getByRole('navigation', { name: '管理メニュー' }).getByRole('link', { name, exact: true }).click();
+}
