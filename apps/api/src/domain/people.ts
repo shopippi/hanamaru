@@ -20,6 +20,7 @@ import { issueInvite, normalizeEmail, type Account } from './auth.js';
 import type { Actor, Ctx } from './context.js';
 import { conflict, forbidden, invalid, notFound } from './errors.js';
 import { parseCsv } from '../lib/csv.js';
+import { resumeBilling, stopBilling } from './billing.js';
 
 // 生徒・講師の登録と管理（3.2、3.3、3.9）
 
@@ -162,8 +163,12 @@ export async function changeStudentStatus(
 ) {
   assertAdmin(actor);
   const s = await loadStudent(ctx.db, studentId);
-  const deferred = (status === 'withdrawn' || status === 'suspended') && !opts.immediately;
+  const leaving = status === 'withdrawn' || status === 'suspended';
+  const deferred = leaving && !opts.immediately;
   const at = startOfMonth(addMonths(monthOf(ctx.now()), 1));
+  // 課金は翌月1日から止める（今月分は返金しない）。休会から戻ると翌月1日から再開する
+  if (leaving) await stopBilling(ctx, s);
+  else if (status === 'active' && s.status === 'suspended') await resumeBilling(ctx, s);
   return ctx.db.transaction(async (tx) => {
     const [updated] = await tx
       .update(students)

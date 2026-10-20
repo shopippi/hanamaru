@@ -25,6 +25,8 @@
 - 他人の生徒・予約は「見つからない」（not_found）として扱い、存在も知らせない（5.2）
 - エラーの文言は画面にそのまま出せる日本語で書く
 - 状態を変える API は JSON だけを受け付ける（CSRF 対策）。Cookie はポータルごとに分ける（4.4）
+- 回数は入金が確定してから付ける（PY-05）。Stripe の通知は stripe_events で重複を弾き、付与は (入金, 理由) で一意（OP-02）
+- 業務ルールの中で「今」を使うときは `ctx.now()`。DB の既定値（now()）に頼る比較はしない
 
 ## 構成
 
@@ -32,6 +34,9 @@
   - `src/db/schema.ts` テーブル定義。変えたら `pnpm --filter @hanamaru/api db:generate` でマイグレーションを作る
   - `src/domain/` 業務ルール
   - `src/http/` HTTP の入口（Hono）。ポータルごとに `/api/student`・`/api/staff`・`/api/manage`。認証と入出力の変換だけを行う
+  - `src/integrations/stripe.ts` Stripe の実装。業務ルールからは `domain/payment-gateway.ts` の形だけを使い、テストでは `test/fake-gateway.ts` に差し替える
+  - `src/domain/jobs.ts` 定期処理（数分おきに全部流す。どれも何度実行しても結果が同じになるように書く）
+  - `scripts/stripe-setup.ts` Stripe の初期設定（カスタマーポータル）
   - `data/teacher-profiles.json` 講師プロフィール（TC-06）
   - `test/` 受入テスト（PGlite のメモリ上の PostgreSQL で動く）
 - `docs/` 要件定義書、検証報告、設計の決定（ADR）

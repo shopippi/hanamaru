@@ -265,6 +265,8 @@ export const reservations = pgTable(
     cancelledAt: ts('cancelled_at'),
     cancelledBy: uuid('cancelled_by').references(() => accounts.id),
     seriesId: uuid('series_id').references(() => reservationSeries.id),
+    /** 前日リマインドを送った日時（NT-01） */
+    reminderSentAt: ts('reminder_sent_at'),
     createdBy: uuid('created_by').references(() => accounts.id),
     createdAt: createdAt(),
   },

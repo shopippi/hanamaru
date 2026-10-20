@@ -11,6 +11,22 @@ import {
   decidePending,
   markAttendance,
 } from '../domain/booking.js';
+import {
+  chargeDetail,
+  createCharge,
+  createCourse,
+  listCharges,
+  listCourses,
+  listPackages,
+  markChargePaid,
+  paymentsCsv,
+  paymentsOfMonth,
+  recordCashEnrollment,
+  recordCashPayment,
+  revisePrice,
+  savePackage,
+  updateCourse,
+} from '../domain/billing.js';
 import { listLessonTypes, listRooms, saveLessonType, saveRoom } from '../domain/catalog.js';
 import { adjustCredits } from '../domain/credits.js';
 import {
@@ -29,7 +45,7 @@ import {
 } from '../domain/people.js';
 import { createInviteCode, deactivateInviteCode, listInviteCodes } from '../domain/registration.js';
 import { availabilityChange, availabilityOf, changeAvailability, createClosure, deleteClosure, teacherMonthStats } from '../domain/schedule.js';
-import { getSettings, settingsSchema, updateSettings } from '../domain/settings.js';
+import { getSettings, settingsPatchSchema, updateSettings } from '../domain/settings.js';
 import { audit } from '../domain/audit.js';
 import { jst, monthOf } from '../lib/time.js';
 import { body, rawBody, dateParam, isoDateTime, monthParam, query, requireAuth, type AppDeps, type Env } from './app.js';
@@ -193,7 +209,7 @@ export function manageRoutes(deps: AppDeps) {
   // --- 設定（3.8） ---
   priv.get('/settings', async (c) => c.json(await getSettings(ctx.db)));
   priv.patch('/settings', async (c) => {
-    const patch = await body(c, settingsSchema.partial());
+    const patch = await body(c, settingsPatchSchema);
     const next = await updateSettings(ctx.db, patch, c.get('auth').account.id);
     await audit(ctx.db, c.get('actor'), 'settings.update', 'settings', null, patch);
     return c.json(next);
@@ -206,6 +222,46 @@ export function manageRoutes(deps: AppDeps) {
   priv.get('/rooms', async (c) => c.json(await listRooms(ctx)));
   priv.post('/rooms', async (c) => c.json(await saveRoom(ctx, c.get('actor'), null, await rawBody(c)), 201));
   priv.patch('/rooms/:id', async (c) => c.json(await saveRoom(ctx, c.get('actor'), c.req.param('id'), await rawBody(c))));
+
+  // --- 料金（PY-01、PY-02、PY-14） ---
+  priv.get('/packages', async (c) => c.json(await listPackages(ctx.db)));
+  priv.post('/packages', async (c) => c.json(await savePackage(ctx, c.get('actor'), null, await rawBody(c)), 201));
+  priv.patch('/packages/:id', async (c) => c.json(await savePackage(ctx, c.get('actor'), c.req.param('id'), await rawBody(c))));
+  priv.get('/courses', async (c) => c.json(await listCourses(ctx.db)));
+  priv.post('/courses', async (c) => c.json(await createCourse(ctx, c.get('actor'), await rawBody(c)), 201));
+  priv.patch('/courses/:id', async (c) => c.json(await updateCourse(ctx, c.get('actor'), c.req.param('id'), await rawBody(c))));
+  priv.post('/courses/:id/price', async (c) => c.json(await revisePrice(ctx, c.get('actor'), c.req.param('id'), await rawBody(c)), 201));
+
+  // --- 入金（PY-06、PY-09、PY-15、PY-17） ---
+  priv.get('/payments', async (c) => {
+    const q = query(c, z.object({ month: monthParam, unpaid: z.literal('1').optional() }));
+    return c.json(await paymentsOfMonth(ctx, c.get('actor'), q.month, { unpaidOnly: !!q.unpaid }));
+  });
+  priv.post('/payments/cash', async (c) => {
+    const input = await body(c, z.object({ studentId: z.string().uuid(), month: monthParam, amount: z.number().int().min(0).optional() }));
+    await recordCashPayment(ctx, c.get('actor'), input);
+    return c.json({ ok: true }, 201);
+  });
+  priv.post('/students/:id/enrollment/cash', async (c) => {
+    const input = await body(c, z.object({ packageId: z.string().uuid() }));
+    await recordCashEnrollment(ctx, c.get('actor'), c.req.param('id'), input.packageId);
+    return c.json({ ok: true }, 201);
+  });
+  priv.get('/payments.csv', async (c) => {
+    const q = query(c, z.object({ from: dateParam, to: dateParam }));
+    const csv = await paymentsCsv(ctx, c.get('actor'), jst(q.from), new Date(jst(q.to).getTime() + 86_400_000));
+    return c.body(csv, 200, {
+      'content-type': 'text/csv; charset=utf-8',
+      'content-disposition': `attachment; filename="payments-${q.from}-${q.to}.csv"`,
+    });
+  });
+  priv.get('/charges', async (c) => c.json(await listCharges(ctx, c.get('actor'))));
+  priv.post('/charges', async (c) => c.json(await createCharge(ctx, c.get('actor'), await rawBody(c)), 201));
+  priv.get('/charges/:id', async (c) => c.json(await chargeDetail(ctx, c.get('actor'), c.req.param('id'))));
+  priv.post('/charge-items/:id/paid', async (c) => {
+    await markChargePaid(ctx, c.get('actor'), c.req.param('id'));
+    return c.json({ ok: true });
+  });
 
   // --- 招待コード（ST-03） ---
   priv.get('/invite-codes', async (c) => c.json(await listInviteCodes(ctx, c.get('actor'))));
