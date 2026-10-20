@@ -44,6 +44,9 @@
    - 本番では未設定だと API が起動しない
    - 検証環境は Cloudflare が公開しているテスト用のキーを使う
 6. **Pages（URL-01、URL-03、URL-04）**: `apps/top` をそのまま公開する（ビルド不要）。`_redirects` で `/student` と `/staff` をそれぞれのログイン画面へ転送する
+   - 特商法の表記・プライバシーポリシー・利用規約は `docs/legal/*.md` が元。文面を直したら `node apps/top/build-legal.mjs` で `apps/top/*.html` を作り直してからコミットする（HTML は直接直さない）
+   - 公開前に、どのページにも【 】（未記入）が残っていないことを確かめる: `grep -n '【' apps/top/*.html`
+   - 利用規約の URL（`https://hanamarumusic.com/terms`）を `TERMS_URL` に入れる。入会の画面の同意のリンクになる（PY-04）
 7. **R2（5.4）**
    - バケット `hanamaru-backups` を作る
    - ライフサイクルルールで「30日より古いオブジェクトを削除」を設定する
