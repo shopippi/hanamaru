@@ -457,3 +457,32 @@ test('3.4 / PY-07 / PY-09 / PY-10 月が変わると請求が並び、猶予を�
     await setClock(null);
   }
 });
+
+test('PY-03 / PY-06 カード払いに切り替えた生徒は、メールのリンクからカードを登録すると自動課金になる', async ({ browser }) => {
+  const a = await adminPage(browser);
+  await adminNav(a, '生徒');
+  await a.getByRole('row').filter({ hasText: EMAIL }).getByRole('link', { name: NAME }).click();
+  const method = a.getByLabel('支払い方法');
+  // いったん現金にしてカードの自動課金を止め、もう一度カード払いにする
+  for (const value of ['cash', 'card']) {
+    await method.selectOption(value);
+    await a.getByRole('button', { name: '保存する', exact: true }).click();
+    await expect(a.getByText('保存しました').first()).toBeVisible();
+  }
+  await a.reload();
+  await expect(a.getByText('カードが登録されていません')).toBeVisible();
+
+  const request = (await mails()).findLast((m) => m.to === EMAIL && m.subject.includes('カードのご登録のお願い'))!;
+  const link = /http\S+\?billing=register/.exec(request.text)![0];
+  const s = await studentPage(browser);
+  await s.goto(link.replace('localhost', '127.0.0.1'));
+  await s.getByRole('button', { name: 'テストのカードを登録する' }).click();
+  await expect(s.getByText('カードを登録しました。翌月1日から毎月自動でお支払いいただきます。')).toBeVisible();
+  await expect(s.getByText('カードの登録をお願いします')).toHaveCount(0);
+
+  await a.reload();
+  await expect(a.getByRole('heading', { name: NAME })).toBeVisible();
+  await expect(a.getByText('カードが登録されていません')).toHaveCount(0);
+  await a.context().close();
+  await s.context().close();
+});

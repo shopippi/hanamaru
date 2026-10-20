@@ -274,6 +274,9 @@ type Settings = {
   reminderHour: number;
 };
 
+/** ログインに欠かせないため、設定にかかわらず送るメール（API の ALWAYS_SENT と同じ） */
+const ALWAYS_SENT = ['invite', 'password_reset'];
+
 const NOTIFY_LABEL: Record<string, string> = {
   reservation_confirmed: '予約の確定',
   reservation_changed: '予約の変更',
@@ -282,6 +285,7 @@ const NOTIFY_LABEL: Record<string, string> = {
   payment_succeeded: 'お支払いの確認',
   payment_failed: 'お支払いの失敗',
   payment_link: 'コンビニ・PayPay の支払いリンク',
+  card_registration: 'カード登録のお願い',
   invite: '招待',
   password_reset: 'パスワード再設定',
   trial_request: '体験レッスンの申込',
@@ -364,9 +368,14 @@ export function SettingsPage() {
               <Panel title="通知（メール）">
                 <div className="stack">
                 <div className="grid-2">
-                {Object.entries(NOTIFY_LABEL).map(([k, label]) => (
-                  <Checkbox key={k} label={label} checked={s.notifications[k] !== false} onChange={(e) => set('notifications', { ...s.notifications, [k]: e.target.checked })} />
-                ))}
+                {Object.entries(NOTIFY_LABEL).map(([k, label]) =>
+                  ALWAYS_SENT.includes(k) ? (
+                    // ログインに欠かせないメールは、送らない設定にできない（NT-02）
+                    <Checkbox key={k} label={`${label}（常に送ります）`} checked disabled />
+                  ) : (
+                    <Checkbox key={k} label={label} checked={s.notifications[k] !== false} onChange={(e) => set('notifications', { ...s.notifications, [k]: e.target.checked })} />
+                  ),
+                )}
                 </div>
                 {numField('reminderHour', '前日リマインドを送る時刻（時）')}
                 </div>

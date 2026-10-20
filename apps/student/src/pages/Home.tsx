@@ -4,6 +4,7 @@ import {
   Button,
   DateTile,
   IconCard,
+  IconCheckCircle,
   IconChevronRight,
   IconClock,
   Loadable,
@@ -74,11 +75,33 @@ export function Home() {
       toast(e instanceof Error ? e.message : '開けませんでした', 'error');
     }
   });
-  // 決済失敗のメールのリンク（?billing=update）から開いたら、カード管理画面へ（PY-11、MB-04）
+  // カードの登録（PY-03）。今月分が未払いなら、その支払いと一緒に登録する
+  const register = useAction(async () => {
+    try {
+      const { url } = await api.post<{ url: string }>(`/students/${current.id}/card-registration`);
+      location.assign(url);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '開けませんでした', 'error');
+    }
+  });
+  const cardDone = params.get('card') === 'done';
+  // 登録の画面から戻ったら、登録の通知が届くまで数秒おきに確かめる
+  useEffect(() => {
+    if (!cardDone || !data?.needsCard) return;
+    const t = setTimeout(reload, 3000);
+    return () => clearTimeout(t);
+  }, [cardDone, data, reload]);
+
+  // 決済失敗のメールのリンク（?billing=update）から開いたら、カード管理画面へ（PY-11、MB-04）。
+  // カード登録のお願いのメールのリンク（?billing=register）から開いたら、カードの登録へ
   useEffect(() => {
     if (params.get('billing') === 'update') {
       setParams({}, { replace: true });
       void portal.run();
+    }
+    if (params.get('billing') === 'register') {
+      setParams({}, { replace: true });
+      void register.run();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -88,6 +111,24 @@ export function Home() {
       {(h) => (
         <div className="stack">
           <h1 className="visually-hidden">{h.student.name}さんのホーム</h1>
+          {cardDone && (
+            <Notice icon={h.needsCard ? <IconClock /> : <IconCheckCircle />}>
+              {h.needsCard ? 'カードの登録を確認しています。この画面のままお待ちください。' : 'カードを登録しました。翌月1日から毎月自動でお支払いいただきます。'}
+            </Notice>
+          )}
+          {h.needsCard && !cardDone && (
+            <Warning title="カードの登録をお願いします">
+              <div className="stack-sm">
+                <p>月謝はカードの自動払いです。カードを登録すると、翌月1日から毎月自動でお支払いいただきます。{h.payment === 'unpaid' || h.payment === 'failed' ? '今月分のお支払いも、登録と一緒に行います。' : ''}</p>
+                <div>
+                  <Button variant="secondary" onClick={() => void register.run()} pending={register.pending} pendingLabel="登録の画面へ移動しています…">
+                    <IconCard size={18} />
+                    カードを登録する
+                  </Button>
+                </div>
+              </div>
+            </Warning>
+          )}
           {checkout === 'done' && h.payment === 'confirming' && (
             <Notice icon={<IconClock />}>お支払いを確認しています。確認できると回数が付きます。この画面のままお待ちください。</Notice>
           )}
@@ -167,7 +208,7 @@ export function Home() {
                     <p>
                       <span className={h.payment === 'failed' || h.payment === 'unpaid' ? 'badge badge-strong' : 'badge badge-dot'}>{PAYMENT_LABEL[h.payment]}</span>
                     </p>
-                    {(h.payment === 'failed' || h.autopay) && (
+                    {(h.payment === 'failed' || h.autopay) && !h.needsCard && (
                       <Button variant={h.payment === 'failed' ? 'primary' : 'quiet'} onClick={() => void portal.run()} pending={portal.pending}>
                         <IconCard size={18} />
                         カードを変更する

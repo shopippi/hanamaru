@@ -402,6 +402,11 @@ async function completePayment(ctx: Ctx, db: Db, payment: Payment, paymentMethod
         note: `${course.name}（${monthLabel(payment.month)}分）`,
       });
     }
+    // カードの登録と一緒に今月分を払ったときは、翌月1日から自動課金を始める（PY-03）
+    if (payment.method === 'card' && paymentMethodId && needsCard(student) && student.stripeCustomerId) {
+      await startSubscription(ctx, db, student, billingAnchor(addMonths(payment.month, 1)), paymentMethodId);
+      await db.update(students).set({ cardSetupSessionId: null }).where(eq(students.id, student.id));
+    }
   } else if (payment.kind === 'one_off' && payment.chargeItemId) {
     await db.update(chargeItems).set({ paid: true, paymentId: payment.id }).where(eq(chargeItems.id, payment.chargeItemId));
   }
@@ -487,6 +492,16 @@ export async function handlePaymentEvent(ctx: Ctx, ev: PaymentEvent): Promise<'p
         }
         await tx.update(payments).set({ status: 'succeeded', paidAt: ctx.now(), failureReason: null }).where(eq(payments.id, p.id));
         return { status: 'processed' as const, notices: await completePayment(ctx, tx, p, null) };
+      }
+      case 'card_registered': {
+        const [s] = await tx.select().from(students).where(eq(students.id, ev.studentId)).for('update');
+        if (!s) return { status: 'ignored' as const, notices: [] };
+        await tx.update(students).set({ cardSetupSessionId: null }).where(eq(students.id, s.id));
+        // 登録が済んだら、翌月1日から自動課金を始める（PY-03、日割りなし）
+        if (needsCard(s) && s.stripeCustomerId) {
+          await startSubscription(ctx, tx, s, billingAnchor(addMonths(monthOf(ctx.now()), 1)), ev.paymentMethodId);
+        }
+        return { status: 'processed' as const, notices: [] };
       }
       case 'subscription_deleted': {
         // Stripe 側で終わった自動課金は、もう自動課金として扱わない（3.4 の先行予約など）
@@ -760,6 +775,24 @@ export async function reconcilePayments(ctx: Ctx): Promise<number> {
       fixed++;
     }
   }
+  // カードの登録の画面も、通知が届かなかったときに備えて照合する
+  const setups = await ctx.db.select().from(students).where(isNotNull(students.cardSetupSessionId));
+  for (const s of setups) {
+    const st = await ctx.payments.cardSetupStatus(s.cardSetupSessionId!);
+    if (st.status === 'open') continue;
+    if (st.status === 'expired') {
+      await ctx.db.update(students).set({ cardSetupSessionId: null }).where(eq(students.id, s.id));
+      continue;
+    }
+    await handlePaymentEvent(ctx, {
+      id: `reconcile:${s.cardSetupSessionId}`,
+      type: 'card_registered',
+      studentId: s.id,
+      sessionId: s.cardSetupSessionId!,
+      paymentMethodId: st.paymentMethodId,
+    });
+    fixed++;
+  }
   return fixed;
 }
 
@@ -834,16 +867,94 @@ export async function applyBillingChange(ctx: Ctx, before: Student, after: Stude
   }
   if (before.billingMethod === 'card' && s.billingMethod !== 'card') {
     await stopBilling(ctx, s);
-  } else if (before.billingMethod !== 'card' && s.billingMethod === 'card' && s.status === 'active' && !s.scheduledStatus) {
-    await resumeBilling(ctx, s);
+  } else if (before.billingMethod !== 'card' && needsCard(s)) {
+    // カードがまだ登録されていないかもしれないので、登録をお願いする。登録が済んだら翌月1日から自動課金を始める
+    await requestCardRegistration(ctx, s);
   }
 }
 
-/** カード払いに切り替えられるか（Stripe にお客さまの登録がないと自動課金を始められない） */
-export function assertCanSwitchToCard(before: Student, nextMethod: string | undefined): void {
-  if (nextMethod === 'card' && before.billingMethod !== 'card' && before.status === 'active' && !before.stripeCustomerId) {
-    throw ruleViolation('カードの登録がないため、カード払いに切り替えられません。カードで支払ったことのある生徒だけが切り替えられます');
+// ---------------------------------------------------------------------------
+// カードの登録（PY-03）
+// ---------------------------------------------------------------------------
+
+/** カード払いで在籍中なのに、自動課金が始まっていない（カードの登録が要る） */
+export function needsCard(s: Student): boolean {
+  return s.billingMethod === 'card' && s.status === 'active' && !s.scheduledStatus && !s.stripeSubscriptionId;
+}
+
+/** 今月分のカード払いで、まだ払われていない請求（自動課金の請求ではないもの） */
+async function unpaidCardMonth(ctx: Ctx, s: Student): Promise<Payment | null> {
+  const [p] = await ctx.db
+    .select()
+    .from(payments)
+    .where(
+      and(
+        eq(payments.studentId, s.id),
+        eq(payments.kind, 'monthly'),
+        eq(payments.month, monthOf(ctx.now())),
+        eq(payments.method, 'card'),
+        inArray(payments.status, ['pending', 'failed']),
+        isNull(payments.stripeInvoiceId),
+      ),
+    );
+  return p ?? null;
+}
+
+/**
+ * カードを登録する Stripe の画面を開く。今月分のカード払いが未払いなら、その支払いと一緒にカードを保存する。
+ * どちらも、登録が済んだら翌月1日から自動課金を始める（PY-03、日割りなし）
+ */
+export async function startCardRegistration(ctx: Ctx, actor: Actor, studentId: string): Promise<{ url: string }> {
+  const s = await studentForActor(ctx.db, actor, studentId);
+  if (!needsCard(s)) throw ruleViolation('カードの登録は必要ありません');
+  const customerId = await ensureCustomer(ctx, ctx.db, s);
+  const due = await unpaidCardMonth(ctx, s);
+  if (due) {
+    const session = await ctx.payments.createCheckout({
+      customerId,
+      paymentId: due.id,
+      amount: due.amount,
+      description: `${monthLabel(due.month!)}分 月謝`,
+      method: 'card',
+      saveCard: true,
+      successUrl: `${ctx.urls.student}/?checkout=done`,
+      cancelUrl: `${ctx.urls.student}/`,
+    });
+    await ctx.db
+      .update(payments)
+      .set({ stripeCheckoutSessionId: session.id, paymentUrl: session.url, status: 'pending', failureReason: null })
+      .where(eq(payments.id, due.id));
+    return { url: session.url };
   }
+  const session = await ctx.payments.createCardSetup({
+    customerId,
+    studentId: s.id,
+    successUrl: `${ctx.urls.student}/?card=done`,
+    cancelUrl: `${ctx.urls.student}/`,
+  });
+  await ctx.db.update(students).set({ cardSetupSessionId: session.id }).where(eq(students.id, s.id));
+  return { url: session.url };
+}
+
+/** カードの登録をお願いするメール。生徒の画面のリンクから登録できる */
+export async function requestCardRegistration(ctx: Ctx, s: Student): Promise<void> {
+  await ctx.notifier.send('card_registration', await recipientOfStudent(ctx.db, s), {
+    subject: '【はなまる音楽教室】カードのご登録のお願い',
+    body:
+      `${s.name} 様\n\n月謝のお支払いがカードの自動払いになりました。\n` +
+      `次のリンクからカードをご登録ください。ご登録後、翌月1日から毎月自動でお支払いいただきます。\n\n` +
+      `${ctx.urls.student}/?billing=register` +
+      SIGNATURE,
+  });
+}
+
+/** 管理者が、カードの登録のお願いをもう一度送る */
+export async function resendCardRequest(ctx: Ctx, actor: Actor, studentId: string): Promise<void> {
+  assertAdmin(actor);
+  const s = await loadStudent(ctx.db, studentId);
+  if (!needsCard(s)) throw ruleViolation('この生徒はカードの登録が必要ありません');
+  await requestCardRegistration(ctx, s);
+  await audit(ctx.db, actor, 'student.card_request', 'student', s.id, {});
 }
 
 // ---------------------------------------------------------------------------

@@ -103,7 +103,16 @@ describe('AU-05 ログインの失敗回数の制限', () => {
     const { account } = await f.mkStudent('太郎');
     await f.setPassword(account.id);
     const b = f.browser('student');
-    for (let i = 0; i < 5; i++) await b.login(account.email, 'wrong-password');
+    for (let i = 0; i < 5; i++) {
+      // ロックに達した回も含めて、間違いには通常の失敗の文言を返す
+      const r = await b.login(account.email, 'wrong-password');
+      expect(r.data.error).toBe('メールアドレスまたはパスワードが正しくありません');
+    }
+    // ロック中でも、パスワードが間違っていればロックのことは知らせない
+    const wrong = await b.login(account.email, 'wrong-password');
+    expect(wrong.status).toBe(401);
+    expect(wrong.data.error).not.toContain('一時的にログインできません');
+    // 正しいパスワードのときだけ、ロック中であることを知らせる
     const locked = await b.login(account.email);
     expect(locked.status).toBe(401);
     expect(locked.data.error).toContain('一時的にログインできません');

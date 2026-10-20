@@ -8,7 +8,7 @@ import {
   reservationsOfStudent,
   slotsForStudent,
 } from '../domain/booking.js';
-import { billingPortal, enrollmentOptions, startEnrollment } from '../domain/billing.js';
+import { billingPortal, enrollmentOptions, startCardRegistration, startEnrollment } from '../domain/billing.js';
 import { listLessonTypes } from '../domain/catalog.js';
 import { DomainError } from '../domain/errors.js';
 import { myStudents, studentHome } from '../domain/home.js';
@@ -102,6 +102,7 @@ export function studentRoutes(deps: AppDeps) {
     return c.json(await startEnrollment(ctx, c.get('actor'), c.req.param('sid'), input));
   });
   // カードの変更は Stripe のカード管理画面で（MB-04）
+  app.post('/students/:sid/card-registration', async (c) => c.json(await startCardRegistration(ctx, c.get('actor'), c.req.param('sid'))));
   app.post('/students/:sid/billing-portal', async (c) => c.json(await billingPortal(ctx, c.get('actor'), c.req.param('sid'))));
 
   app.post('/reservations/:id/change', async (c) => {

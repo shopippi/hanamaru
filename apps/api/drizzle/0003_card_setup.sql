@@ -1,0 +1,1 @@
+ALTER TABLE "students" ADD COLUMN "card_setup_session_id" text;

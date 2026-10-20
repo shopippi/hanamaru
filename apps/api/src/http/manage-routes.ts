@@ -23,6 +23,7 @@ import {
   paymentsOfMonth,
   recordCashEnrollment,
   recordCashPayment,
+  resendCardRequest,
   revisePrice,
   savePackage,
   updateCourse,
@@ -243,6 +244,10 @@ export function manageRoutes(deps: AppDeps) {
     const input = await body(c, z.object({ studentId: z.string().uuid(), month: monthParam, amount: z.number().int().min(0).optional() }));
     await recordCashPayment(ctx, c.get('actor'), input);
     return c.json({ ok: true }, 201);
+  });
+  priv.post('/students/:id/card-request', async (c) => {
+    await resendCardRequest(ctx, c.get('actor'), c.req.param('id'));
+    return c.json({ ok: true });
   });
   priv.post('/students/:id/enrollment/cash', async (c) => {
     const input = await body(c, z.object({ packageId: z.string().uuid() }));
