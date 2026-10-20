@@ -6,6 +6,7 @@ import type {
   PaymentEvent,
   PaymentGateway,
 } from '../domain/payment-gateway.js';
+import { billingMonthOf } from '../lib/time.js';
 
 // Stripe（Checkout、Billing、カスタマーポータル、Webhook）の実装（6.1）。
 // 検証環境では必ずテストモードのキー（sk_test_）を使う（7.3）。
@@ -89,7 +90,8 @@ export class StripeGateway implements PaymentGateway {
         invoice_settings: { default_payment_method: input.paymentMethodId },
       });
     }
-    // 翌月1日までは無料期間にして、1日に初回の課金をする（日割りなし。PY-03）
+    // 翌月1日までは無料期間にして、1日に初回の課金をする（日割りなし。PY-03）。
+    // startAt は UTC でも1日になる時刻（billingAnchor）なので、以後の課金日も毎月1日になる
     const sub = await this.stripe.subscriptions.create(
       {
         customer: input.customerId,
@@ -119,12 +121,33 @@ export class StripeGateway implements PaymentGateway {
     await this.stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
   }
 
+  async resumeSubscription(subscriptionId: string): Promise<void> {
+    await this.stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: false });
+  }
+
+  async findLiveSubscription(customerId: string, studentId: string): Promise<string | null> {
+    const list = await this.stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 20 });
+    const live = list.data.find(
+      (s) =>
+        s.metadata?.studentId === studentId &&
+        !s.cancel_at_period_end &&
+        (s.status === 'trialing' || s.status === 'active' || s.status === 'past_due' || s.status === 'unpaid' || s.status === 'incomplete'),
+    );
+    return live?.id ?? null;
+  }
+
+  async voidInvoice(invoiceId: string): Promise<void> {
+    await this.stripe.invoices.voidInvoice(invoiceId);
+  }
+
   async billingPortalUrl(customerId: string, returnUrl: string): Promise<string> {
+    // 既定のカード管理画面は解約ができてしまうため、専用の設定がなければ開かない（PY-13）
+    if (!this.portalConfigurationId) throw new Error('STRIPE_PORTAL_CONFIGURATION_ID is not set (run scripts/stripe-setup.ts)');
     const session = await this.stripe.billingPortal.sessions.create({
       customer: customerId,
       return_url: returnUrl,
       locale: 'ja',
-      ...(this.portalConfigurationId ? { configuration: this.portalConfigurationId } : {}),
+      configuration: this.portalConfigurationId,
     });
     return session.url;
   }
@@ -137,9 +160,12 @@ export class StripeGateway implements PaymentGateway {
     return { status: 'open', paymentMethodId: null };
   }
 
-  async findSubscriptionInvoice(subscriptionId: string, periodStart: Date): Promise<InvoiceStatus | null> {
+  async findSubscriptionInvoice(subscriptionId: string, month: string): Promise<InvoiceStatus | null> {
     const list = await this.stripe.invoices.list({ subscription: subscriptionId, limit: 12 });
-    const inv = list.data.find((i) => i.lines.data[0]?.period.start === unix(periodStart) && i.amount_due > 0);
+    const inv = list.data.find((i) => {
+      const start = i.lines.data[0]?.period.start;
+      return start !== undefined && i.amount_due > 0 && billingMonthOf(new Date(start * 1000)) === month;
+    });
     if (!inv?.id) return null;
     const status: InvoiceStatus['status'] =
       inv.status === 'paid'
@@ -170,6 +196,9 @@ export class StripeGateway implements PaymentGateway {
         const paymentId = s.metadata?.paymentId;
         if (!paymentId) return null;
         return { id: event.id, type: 'checkout_failed', paymentId, sessionId: s.id };
+      }
+      case 'customer.subscription.deleted': {
+        return { id: event.id, type: 'subscription_deleted', subscriptionId: event.data.object.id };
       }
       case 'invoice.paid':
       case 'invoice.payment_failed': {

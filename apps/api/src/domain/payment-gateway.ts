@@ -33,6 +33,8 @@ export type PaymentEvent =
   | { id: string; type: 'checkout_paid'; paymentId: string; sessionId: string; paymentMethodId: string | null }
   | { id: string; type: 'checkout_failed'; paymentId: string; sessionId: string }
   | { id: string; type: 'invoice_paid'; subscriptionId: string; invoiceId: string; periodStart: Date; amount: number }
+  /** サブスクリプションが終わった（月末で止めたものが終わった、Stripe の画面で解約されたなど） */
+  | { id: string; type: 'subscription_deleted'; subscriptionId: string }
   | {
       id: string;
       type: 'invoice_failed';
@@ -48,7 +50,7 @@ export interface PaymentGateway {
   createCheckout(req: CheckoutRequest): Promise<{ id: string; url: string }>;
   /** 月額コースの料金（毎月・税込・円）を Stripe の Price として用意する */
   createMonthlyPrice(input: { coursePriceId: string; courseName: string; amount: number }): Promise<string>;
-  /** startAt（翌月1日）から毎月課金するサブスクリプション。日割りなし（PY-03） */
+  /** startAt（翌月1日 9:00。lib/time.ts の billingAnchor）から毎月課金するサブスクリプション。日割りなし（PY-03） */
   createSubscription(input: {
     customerId: string;
     priceId: string;
@@ -60,11 +62,21 @@ export interface PaymentGateway {
   changeSubscriptionPrice(subscriptionId: string, priceId: string): Promise<void>;
   /** 今の期間（月末）で課金を止める（ST-05） */
   cancelSubscriptionAtPeriodEnd(subscriptionId: string): Promise<void>;
+  /** 月末で止める設定を取り消す（予定していた退会・休会を取りやめたとき） */
+  resumeSubscription(subscriptionId: string): Promise<void>;
+  /**
+   * その生徒の、止めていない（月末で止める設定もしていない）サブスクリプション。なければ null。
+   * 作成の途中で処理が失敗して再送されたときに、二重に作らないために使う
+   */
+  findLiveSubscription(customerId: string, studentId: string): Promise<string | null>;
+  /** 未払いの請求を取り消す（現金で受け取った月のカードの請求など） */
+  voidInvoice(invoiceId: string): Promise<void>;
   /** カード管理画面（MB-04）。解約の操作は出さない設定で作る（PY-13） */
   billingPortalUrl(customerId: string, returnUrl: string): Promise<string>;
   /** 通知が届かなかった場合の照合用（OP-02） */
   checkoutStatus(sessionId: string): Promise<CheckoutStatus>;
-  findSubscriptionInvoice(subscriptionId: string, periodStart: Date): Promise<InvoiceStatus | null>;
+  /** その月（billingMonthOf で求めた月）の請求 */
+  findSubscriptionInvoice(subscriptionId: string, month: string): Promise<InvoiceStatus | null>;
   /** 署名を確かめて通知を読む。扱わない種類なら null。署名が不正なら例外 */
   parseWebhook(rawBody: string, signature: string): Promise<PaymentEvent | null>;
 }

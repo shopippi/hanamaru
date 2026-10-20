@@ -3,6 +3,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { Hono } from 'hono';
+import { eq } from 'drizzle-orm';
 import * as schema from './db/schema.js';
 import pg from 'pg';
 import { connect, MIGRATIONS_DIR, type Db } from './db/client.js';
@@ -50,6 +51,11 @@ class DevGateway implements PaymentGateway {
   }
   async changeSubscriptionPrice() {}
   async cancelSubscriptionAtPeriodEnd() {}
+  async resumeSubscription() {}
+  async findLiveSubscription() {
+    return null;
+  }
+  async voidInvoice() {}
   async billingPortalUrl(_customerId: string, returnUrl: string) {
     return `${API_ORIGIN}/dev/portal?return=${encodeURIComponent(returnUrl)}`;
   }
@@ -176,7 +182,12 @@ dev.get('/portal', (c) =>
   c.html(`<!doctype html><meta name="viewport" content="width=device-width"><body style="font-family:sans-serif;max-width:480px;margin:40px auto;padding:0 16px">
   <h1>カード管理（開発用）</h1><p>本番では Stripe のカード管理画面が開きます。解約の操作は出ません。</p><p><a href="${c.req.query('return')}">戻る</a></p></body>`),
 );
-dev.get('/totp', (c) => c.text(totpCode(ADMIN_TOTP_SECRET, ctx.now())));
+// 開発用の管理者の確認コード。画面の通しテストでは何度もログインし、時計も戻すので、
+// 同じコードの使い回しの防止（AU-06）を開発用の管理者だけ毎回解除してから返す
+dev.get('/totp', async (c) => {
+  await db.update(schema.accounts).set({ totpLastStep: null }).where(eq(schema.accounts.email, 'admin@example.test'));
+  return c.text(totpCode(ADMIN_TOTP_SECRET, ctx.now()));
+});
 dev.post('/jobs', async (c) => c.json(await runJobs(ctx)));
 // 時計を進める（月末・月初の処理の確認用）。{ "at": "2026-11-01T00:10:00+09:00" }。null で元に戻す
 dev.post('/clock', async (c) => {

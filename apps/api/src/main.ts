@@ -44,6 +44,11 @@ const ctx: Ctx = {
   urls: { student: env.STUDENT_URL, staff: env.STAFF_URL, manage: env.MANAGE_URL },
 };
 
+if (!env.STRIPE_PORTAL_CONFIGURATION_ID && process.env.NODE_ENV === 'production') {
+  // 解約の操作がないカード管理画面の設定がないと、生徒が解約できてしまう（PY-13）
+  throw new Error('STRIPE_PORTAL_CONFIGURATION_ID is required in production');
+}
+
 if (!env.TURNSTILE_SECRET) {
   // フォームのボット対策（NF-06）を本番で外さない。検証環境は Turnstile のテスト用キーを使う
   if (process.env.NODE_ENV === 'production') throw new Error('TURNSTILE_SECRET is required in production');

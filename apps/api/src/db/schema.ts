@@ -34,6 +34,10 @@ export const accounts = pgTable('accounts', {
   lockedUntil: ts('locked_until'),
   totpSecret: text('totp_secret'),
   totpEnabled: boolean('totp_enabled').notNull().default(false),
+  /** 確認コードの続けての失敗回数（AU-05 と同じ上限でロックする） */
+  failedTotpCount: integer('failed_totp_count').notNull().default(0),
+  /** 最後に使った確認コードの時間の区切り。同じコードを二度使わせない（AU-06） */
+  totpLastStep: integer('totp_last_step'),
   disabled: boolean('disabled').notNull().default(false),
   createdAt: createdAt(),
 });
@@ -395,6 +399,22 @@ export const payments = pgTable(
       .on(t.studentId, t.month)
       .where(sql`${t.kind} = 'monthly'`),
   ],
+);
+
+/**
+ * 生徒ごとの Stripe のサブスクリプションの履歴。students.stripeSubscriptionId は今の自動課金だけを持ち、
+ * 止めたあとに届く請求の通知も、ここから生徒を探せるようにする（PY-05、ST-05）
+ */
+export const stripeSubscriptions = pgTable(
+  'stripe_subscriptions',
+  {
+    id: text('id').primaryKey(),
+    studentId: uuid('student_id').notNull().references(() => students.id),
+    /** 月末で止める設定にした日時。止めていなければ null */
+    stoppedAt: ts('stopped_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('stripe_subscriptions_student_idx').on(t.studentId)],
 );
 
 /** Stripe の通知（Webhook）の受信記録。同じ通知を二度処理しない（OP-02） */
