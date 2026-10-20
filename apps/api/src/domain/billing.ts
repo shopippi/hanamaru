@@ -261,8 +261,11 @@ export async function enrollmentOptions(ctx: Ctx, actor: Actor, studentId: strin
   const packages = await listPackages(ctx.db, { activeOnly: true });
   const course = s.courseId ? (await ctx.db.select().from(courses).where(eq(courses.id, s.courseId)))[0] : null;
   const price = s.courseId ? await currentPrice(ctx.db, s.courseId).catch(() => null) : null;
+  const settings = await getSettings(ctx.db);
   return {
     status: s.status,
+    /** 入会画面で同意を取る契約の内容に使う値（3.8 の設定値） */
+    terms: { cancelDeadlineHours: settings.cancelDeadlineHours, graceDays: settings.graceDays },
     packages: packages.map((p) => ({
       id: p.id,
       name: p.name,
@@ -288,10 +291,12 @@ export async function startEnrollment(
   ctx: Ctx,
   actor: Actor,
   studentId: string,
-  input: { packageId: string; method: OnlineMethod },
+  input: { packageId: string; method: OnlineMethod; agreed: boolean },
 ): Promise<{ url: string }> {
   const s = await studentForActor(ctx.db, actor, studentId);
   if (s.status !== 'enrolling') throw ruleViolation('入会手続きはすでに済んでいます');
+  // 契約の内容（期間・自動課金・退会と休会・キャンセル）と利用規約への同意を、お支払いの前に取る
+  if (input.agreed !== true) throw invalid('契約の内容と利用規約への同意が必要です');
   if (!s.approved) throw ruleViolation('教室の承認後に入会手続きができます');
   if (!s.courseId) throw ruleViolation('月額コースが設定されていません。教室にお問い合わせください');
   const [pkg] = await ctx.db.select().from(enrollmentPackages).where(eq(enrollmentPackages.id, input.packageId));
@@ -318,6 +323,8 @@ export async function startEnrollment(
     .set({ stripeCheckoutSessionId: session.id, paymentUrl: session.url })
     .where(eq(payments.id, payment!.id));
   await ctx.db.update(students).set({ billingMethod: input.method }).where(eq(students.id, s.id));
+  // いつ同意したかを残す（入会時の同意の記録）
+  await audit(ctx.db, actor, 'student.terms_agreed', 'student', s.id, { paymentId: payment!.id, packageId: pkg.id, method: input.method });
   return { url: session.url };
 }
 
@@ -365,6 +372,14 @@ async function completePayment(ctx: Ctx, db: Db, payment: Payment, paymentMethod
   if (already.length > 0) return notices;
 
   if (payment.kind === 'enrollment') {
+    // 入会の支払いをやり直して、2回とも払われた: 2回目は回数を付けず、教室に返金を知らせる
+    const [other] = await db
+      .select({ id: payments.id })
+      .from(payments)
+      .where(and(eq(payments.studentId, student.id), eq(payments.kind, 'enrollment'), eq(payments.status, 'succeeded'), sql`${payments.id} <> ${payment.id}`));
+    if (other) {
+      return doublePaymentNotices(db, payment, '【要確認】入会の支払いが二重にありました', `入会セットの支払い（Stripe の決済画面 ${payment.stripeCheckoutSessionId ?? ''}）`);
+    }
     const [pkg] = payment.enrollmentPackageId
       ? await db.select().from(enrollmentPackages).where(eq(enrollmentPackages.id, payment.enrollmentPackageId))
       : [];
@@ -403,8 +418,9 @@ async function completePayment(ctx: Ctx, db: Db, payment: Payment, paymentMethod
       });
     }
     // カードの登録と一緒に今月分を払ったときは、翌月1日から自動課金を始める（PY-03）
+    // 開始は「今」の翌月1日。月をまたいで前の月の分を払ったときに、過去の日時や払い済みの月から始めない
     if (payment.method === 'card' && paymentMethodId && needsCard(student) && student.stripeCustomerId) {
-      await startSubscription(ctx, db, student, billingAnchor(addMonths(payment.month, 1)), paymentMethodId);
+      await startSubscription(ctx, db, student, billingAnchor(addMonths(monthOf(ctx.now()), 1)), paymentMethodId);
       await db.update(students).set({ cardSetupSessionId: null }).where(eq(students.id, student.id));
     }
   } else if (payment.kind === 'one_off' && payment.chargeItemId) {
@@ -433,7 +449,7 @@ async function markFailed(db: Db, payment: Payment, reason: string): Promise<voi
 async function monthlyPaymentForInvoice(
   db: Db,
   ev: { subscriptionId: string; invoiceId: string; periodStart: Date; amount: number },
-): Promise<Payment | null> {
+): Promise<{ payment: Payment; student: Student; sameInvoice: boolean } | null> {
   const student = await studentOfSubscription(db, ev.subscriptionId);
   if (!student) return null;
   // 課金日が日本時間の1日 0:00 からずれても、いちばん近い月の月謝として扱う
@@ -443,16 +459,19 @@ async function monthlyPaymentForInvoice(
     .from(payments)
     .where(and(eq(payments.studentId, student.id), eq(payments.kind, 'monthly'), eq(payments.month, month)));
   if (existing) {
+    const sameInvoice = existing.stripeInvoiceId === ev.invoiceId;
+    // 入金済みの行（現金や決済画面で払った月）は書き換えない
+    if (existing.status === 'succeeded') return { payment: existing, student, sameInvoice };
     if (!existing.stripeInvoiceId) {
       await db.update(payments).set({ stripeInvoiceId: ev.invoiceId, amount: ev.amount }).where(eq(payments.id, existing.id));
     }
-    return { ...existing, stripeInvoiceId: ev.invoiceId, amount: ev.amount };
+    return { payment: { ...existing, stripeInvoiceId: existing.stripeInvoiceId ?? ev.invoiceId, amount: ev.amount }, student, sameInvoice };
   }
   const [created] = await db
     .insert(payments)
     .values({ studentId: student.id, kind: 'monthly', method: 'card', month, amount: ev.amount, stripeInvoiceId: ev.invoiceId })
     .returning();
-  return created!;
+  return { payment: created!, student, sameInvoice: true };
 }
 
 /**
@@ -474,24 +493,52 @@ export async function handlePaymentEvent(ctx: Ctx, ev: PaymentEvent): Promise<'p
         const [p] = await tx.select().from(payments).where(eq(payments.id, ev.paymentId)).for('update');
         if (!p) return { status: 'ignored' as const, notices: [] };
         if (ev.type === 'checkout_failed') {
+          // 作り直したあとの古い画面の期限切れは、今の画面には関係しない
+          if (p.stripeCheckoutSessionId && p.stripeCheckoutSessionId !== ev.sessionId) return { status: 'processed' as const, notices: [] };
           await markFailed(tx, p, 'checkout_failed');
           return { status: 'processed' as const, notices: [] };
         }
-        if (p.status === 'succeeded') return { status: 'processed' as const, notices: [] };
-        await tx.update(payments).set({ status: 'succeeded', paidAt: ctx.now(), failureReason: null }).where(eq(payments.id, p.id));
+        if (p.status === 'succeeded') {
+          // 同じ画面の通知の重複（Webhook と照合など）は何もしない。
+          // 現金で入金済みの月や、別の画面・自動課金で払い済みの月にまた払われたら、二重の入金なので教室に知らせる
+          if (p.method !== 'cash' && p.stripeCheckoutSessionId === ev.sessionId) return { status: 'processed' as const, notices: [] };
+          return {
+            status: 'processed' as const,
+            notices: await doublePaymentNotices(tx, p, '【要確認】入金済みの月に、もう一度お支払いがありました', `決済画面での支払い（Stripe の決済画面 ${ev.sessionId}）`),
+          };
+        }
+        // どの画面で払われたかを残す（あとで別の画面からも払われたら、二重の入金と分かるように）
+        const [taken] = await tx
+          .select({ id: payments.id })
+          .from(payments)
+          .where(and(eq(payments.stripeCheckoutSessionId, ev.sessionId), sql`${payments.id} <> ${p.id}`));
+        await tx
+          .update(payments)
+          .set({ status: 'succeeded', paidAt: ctx.now(), failureReason: null, ...(taken ? {} : { stripeCheckoutSessionId: ev.sessionId }) })
+          .where(eq(payments.id, p.id));
         return { status: 'processed' as const, notices: await completePayment(ctx, tx, p, ev.paymentMethodId) };
       }
       case 'invoice_paid': {
         if (ev.amount === 0) return { status: 'ignored' as const, notices: [] };
-        const p = await monthlyPaymentForInvoice(tx, ev);
-        if (!p) return { status: 'ignored' as const, notices: [] };
+        const found = await monthlyPaymentForInvoice(tx, ev);
+        if (!found) return { status: 'ignored' as const, notices: [] };
+        const p = found.payment;
         if (p.status === 'succeeded') {
-          // 現金などで入金済みの月にカードの課金もされた: 二重の入金なので、教室に知らせて返金してもらう
-          if (p.method !== 'card') return { status: 'processed' as const, notices: await doublePaymentNotices(tx, p, ev.invoiceId) };
-          return { status: 'processed' as const, notices: [] };
+          // 同じ請求の通知の重複は何もしない。現金や決済画面で入金済みの月にカードの課金もされたら、
+          // 二重の入金なので、教室に知らせて返金してもらう
+          if (found.sameInvoice && p.method !== 'cash') return { status: 'processed' as const, notices: [] };
+          return {
+            status: 'processed' as const,
+            notices: await doublePaymentNotices(tx, p, '【要確認】入金済みの月にカードの課金がありました', `カードの自動課金（Stripe の請求 ${ev.invoiceId}）`),
+          };
         }
         await tx.update(payments).set({ status: 'succeeded', paidAt: ctx.now(), failureReason: null }).where(eq(payments.id, p.id));
-        return { status: 'processed' as const, notices: await completePayment(ctx, tx, p, null) };
+        const notices = await completePayment(ctx, tx, p, null);
+        // 休会・退会のあとに課金された（月末で止める前の請求など）: 教室に知らせて返金を確かめてもらう（ST-05）
+        if (found.student.status === 'suspended' || found.student.status === 'withdrawn') {
+          notices.push(...(await leftStudentChargedNotices(tx, found.student, p, ev.invoiceId)));
+        }
+        return { status: 'processed' as const, notices };
       }
       case 'card_registered': {
         const [s] = await tx.select().from(students).where(eq(students.id, ev.studentId)).for('update');
@@ -504,7 +551,15 @@ export async function handlePaymentEvent(ctx: Ctx, ev: PaymentEvent): Promise<'p
         return { status: 'processed' as const, notices: [] };
       }
       case 'subscription_deleted': {
-        // Stripe 側で終わった自動課金は、もう自動課金として扱わない（3.4 の先行予約など）
+        // Stripe 側で終わった自動課金は、もう自動課金として扱わない（3.4 の先行予約など）。
+        // 終わったあとに残りの請求が払われることもあるので、履歴には必ず残す
+        const [owner] = await tx.select().from(students).where(eq(students.stripeSubscriptionId, ev.subscriptionId));
+        if (owner) {
+          await tx
+            .insert(stripeSubscriptions)
+            .values({ id: ev.subscriptionId, studentId: owner.id, createdAt: ctx.now(), stoppedAt: ctx.now() })
+            .onConflictDoNothing();
+        }
         await tx
           .update(stripeSubscriptions)
           .set({ stoppedAt: ctx.now() })
@@ -513,11 +568,15 @@ export async function handlePaymentEvent(ctx: Ctx, ev: PaymentEvent): Promise<'p
         return { status: 'processed' as const, notices: [] };
       }
       case 'invoice_failed': {
-        const p = await monthlyPaymentForInvoice(tx, ev);
-        if (!p) return { status: 'ignored' as const, notices: [] };
+        const found = await monthlyPaymentForInvoice(tx, ev);
+        if (!found) return { status: 'ignored' as const, notices: [] };
+        const p = found.payment;
         // 通知の順番は保証されない。入金済みの月に遅れて失敗の通知が届いても、失敗のメールは送らない
         if (p.status === 'succeeded') return { status: 'processed' as const, notices: [] };
+        // Stripe は失敗した請求を何度か引き落とし直す。メールは最初に失敗したときの1通だけにする
+        const alreadyNotified = p.status === 'failed';
         await markFailed(tx, p, 'invoice_payment_failed');
+        if (alreadyNotified) return { status: 'processed' as const, notices: [] };
         const student = await loadStudent(tx, p.studentId);
         const settings = await getSettings(tx);
         // 猶予期間の最後の日（その翌日 0:00 に取り消す。PY-10）
@@ -545,13 +604,28 @@ export async function handlePaymentEvent(ctx: Ctx, ev: PaymentEvent): Promise<'p
   return result.status;
 }
 
-async function doublePaymentNotices(db: Db, p: Payment, invoiceId: string): Promise<Notice[]> {
+async function doublePaymentNotices(db: Db, p: Payment, subject: string, source: string): Promise<Notice[]> {
   const student = await loadStudent(db, p.studentId);
+  const what = p.kind === 'enrollment' ? '入会セット' : `${monthLabel(p.month!)}分`;
+  const how = p.method === 'cash' ? '現金' : 'ほかの方法';
   const message: Message = {
-    subject: '【要確認】入金済みの月にカードの課金がありました',
+    subject,
     body:
-      `${student.name} さんの${monthLabel(p.month!)}分は${p.method === 'cash' ? '現金' : 'ほかの方法'}で入金済みですが、` +
-      `カードの自動課金（Stripe の請求 ${invoiceId}）も支払われました。\n二重のお支払いになっているため、Stripe の管理画面から返金してください。` +
+      `${student.name} さんの${what}は${p.kind === 'enrollment' ? 'すでに' : `${how}で`}入金済みですが、${source}もありました。\n` +
+      `二重のお支払いになっているため、Stripe の管理画面から返金してください。回数は二重には付けていません。` +
+      SIGNATURE,
+  };
+  return (await adminRecipients(db)).map((to) => ({ type: 'payment_succeeded' as const, to, message }));
+}
+
+/** 休会・退会のあとの課金を教室に知らせる（ST-05: 翌月1日から課金を止める） */
+async function leftStudentChargedNotices(db: Db, student: Student, p: Payment, invoiceId: string): Promise<Notice[]> {
+  const label = student.status === 'suspended' ? '休会' : '退会';
+  const message: Message = {
+    subject: `【要確認】${label}中の生徒にカードの課金がありました`,
+    body:
+      `${student.name} さんは${label}中ですが、${monthLabel(p.month!)}分のカードの自動課金（Stripe の請求 ${invoiceId}、${yen(p.amount)}）がありました。\n` +
+      `返金が必要か確かめ、必要なら Stripe の管理画面から返金してください。` +
       SIGNATURE,
   };
   return (await adminRecipients(db)).map((to) => ({ type: 'payment_succeeded' as const, to, message }));
@@ -690,7 +764,8 @@ async function prepareStudentMonth(ctx: Ctx, s: Student, month: Month): Promise<
     subject: `【はなまる音楽教室】${monthLabel(month)}分 月謝のお支払いのお願い`,
     body:
       `${s.name} 様\n\n${monthLabel(month)}分の月謝（${yen(payment.amount)}・税込）のお支払いをお願いします。\n` +
-      `次のリンクから${label}でお支払いください。お支払いを確認してから、今月のレッスンを予約できます。\n\n${session.url}` +
+      `次のリンクから${label}でお支払いください。お支払いを確認してから、今月のレッスンを予約できます。\n\n${session.url}\n\n` +
+      `リンクの期限（24時間）が切れた場合は、次のリンクからアプリを開くと、お支払いの画面を開き直せます。\n${ctx.urls.student}/?billing=pay` +
       SIGNATURE,
   });
   return { created, linkSent: true };
@@ -882,8 +957,43 @@ export function needsCard(s: Student): boolean {
   return s.billingMethod === 'card' && s.status === 'active' && !s.scheduledStatus && !s.stripeSubscriptionId;
 }
 
-/** 今月分のカード払いで、まだ払われていない請求（自動課金の請求ではないもの） */
-async function unpaidCardMonth(ctx: Ctx, s: Student): Promise<Payment | null> {
+/**
+ * その月の月謝を自動課金が払うか。自動課金は始めた月の翌月1日から課金するので、
+ * 始めた月（とそれより前）は対象外。履歴のない古い自動課金は、対象として扱う
+ */
+async function coveredBySubscription(db: Db, s: Student, month: Month): Promise<boolean> {
+  if (!s.stripeSubscriptionId) return false;
+  const [row] = await db.select().from(stripeSubscriptions).where(eq(stripeSubscriptions.id, s.stripeSubscriptionId));
+  return !row || monthOf(row.createdAt) < month;
+}
+
+/**
+ * 今月分のカード払いで、自動課金が払わない（まだ払われていない）請求。
+ * カードの登録と一緒に払う月や、月をまたいで登録したため自動課金の対象外になった月
+ */
+export async function unpaidCardMonth(ctx: Ctx, s: Student): Promise<Payment | null> {
+  if (s.billingMethod !== 'card' || s.status !== 'active') return null;
+  const month = monthOf(ctx.now());
+  const [p] = await ctx.db
+    .select()
+    .from(payments)
+    .where(
+      and(
+        eq(payments.studentId, s.id),
+        eq(payments.kind, 'monthly'),
+        eq(payments.month, month),
+        eq(payments.method, 'card'),
+        inArray(payments.status, ['pending', 'failed']),
+        isNull(payments.stripeInvoiceId),
+      ),
+    );
+  if (!p || (await coveredBySubscription(ctx.db, s, month))) return null;
+  return p;
+}
+
+/** 今月分のコンビニ・PayPay の未払いの請求（PY-16） */
+export async function unpaidLinkMonth(ctx: Ctx, s: Student): Promise<Payment | null> {
+  if (s.status !== 'active') return null;
   const [p] = await ctx.db
     .select()
     .from(payments)
@@ -892,48 +1002,67 @@ async function unpaidCardMonth(ctx: Ctx, s: Student): Promise<Payment | null> {
         eq(payments.studentId, s.id),
         eq(payments.kind, 'monthly'),
         eq(payments.month, monthOf(ctx.now())),
-        eq(payments.method, 'card'),
+        inArray(payments.method, ['konbini', 'paypay']),
         inArray(payments.status, ['pending', 'failed']),
-        isNull(payments.stripeInvoiceId),
       ),
     );
   return p ?? null;
 }
 
 /**
- * カードを登録する Stripe の画面を開く。今月分のカード払いが未払いなら、その支払いと一緒にカードを保存する。
- * どちらも、登録が済んだら翌月1日から自動課金を始める（PY-03、日割りなし）
+ * 月謝の決済画面を開く。開いている画面があればそれを使い、期限が切れていれば（Checkout は24時間で切れる）作り直す
+ */
+async function monthlyCheckout(ctx: Ctx, s: Student, p: Payment, method: OnlineMethod, saveCard: boolean): Promise<{ url: string }> {
+  if (p.stripeCheckoutSessionId && p.status === 'pending') {
+    const st = await ctx.payments.checkoutStatus(p.stripeCheckoutSessionId);
+    if (st.status === 'open' && p.paymentUrl) return { url: p.paymentUrl };
+    if (st.status === 'paid') throw conflict('お支払いを確認しています。しばらくしてから画面を開き直してください');
+  }
+  const session = await ctx.payments.createCheckout({
+    customerId: await ensureCustomer(ctx, ctx.db, s),
+    paymentId: p.id,
+    amount: p.amount,
+    description: `${monthLabel(p.month!)}分 月謝`,
+    method,
+    saveCard,
+    successUrl: `${ctx.urls.student}/?checkout=done`,
+    cancelUrl: `${ctx.urls.student}/`,
+    ...(p.stripeCheckoutSessionId ? { replaces: p.stripeCheckoutSessionId } : {}),
+  });
+  await ctx.db
+    .update(payments)
+    .set({ stripeCheckoutSessionId: session.id, paymentUrl: session.url, status: 'pending', failureReason: null })
+    .where(and(eq(payments.id, p.id), inArray(payments.status, ['pending', 'failed'])));
+  return { url: session.url };
+}
+
+/**
+ * カードの登録・今月分のカード払いの Stripe の画面を開く。
+ * - 今月分が自動課金の対象外で未払いなら、その支払いの画面（カードの登録が要るならカードも保存する）
+ * - そうでなくカードの登録が要るなら、カードだけを登録する画面
+ * どちらも、カードを登録したら翌月1日から自動課金を始める（PY-03、日割りなし）
  */
 export async function startCardRegistration(ctx: Ctx, actor: Actor, studentId: string): Promise<{ url: string }> {
   const s = await studentForActor(ctx.db, actor, studentId);
-  if (!needsCard(s)) throw ruleViolation('カードの登録は必要ありません');
-  const customerId = await ensureCustomer(ctx, ctx.db, s);
   const due = await unpaidCardMonth(ctx, s);
-  if (due) {
-    const session = await ctx.payments.createCheckout({
-      customerId,
-      paymentId: due.id,
-      amount: due.amount,
-      description: `${monthLabel(due.month!)}分 月謝`,
-      method: 'card',
-      saveCard: true,
-      successUrl: `${ctx.urls.student}/?checkout=done`,
-      cancelUrl: `${ctx.urls.student}/`,
-    });
-    await ctx.db
-      .update(payments)
-      .set({ stripeCheckoutSessionId: session.id, paymentUrl: session.url, status: 'pending', failureReason: null })
-      .where(eq(payments.id, due.id));
-    return { url: session.url };
-  }
+  if (due) return monthlyCheckout(ctx, s, due, 'card', needsCard(s));
+  if (!needsCard(s)) throw ruleViolation('カードの登録は必要ありません');
   const session = await ctx.payments.createCardSetup({
-    customerId,
+    customerId: await ensureCustomer(ctx, ctx.db, s),
     studentId: s.id,
     successUrl: `${ctx.urls.student}/?card=done`,
     cancelUrl: `${ctx.urls.student}/`,
   });
   await ctx.db.update(students).set({ cardSetupSessionId: session.id }).where(eq(students.id, s.id));
   return { url: session.url };
+}
+
+/** コンビニ・PayPay の今月分の決済画面を開く（PY-16）。メールのリンクの期限が切れても、生徒のトップから開き直せる */
+export async function startMonthlyPayment(ctx: Ctx, actor: Actor, studentId: string): Promise<{ url: string }> {
+  const s = await studentForActor(ctx.db, actor, studentId);
+  const p = await unpaidLinkMonth(ctx, s);
+  if (!p) throw ruleViolation('お支払いが必要な請求はありません');
+  return monthlyCheckout(ctx, s, p, p.method as 'konbini' | 'paypay', false);
 }
 
 /** カードの登録をお願いするメール。生徒の画面のリンクから登録できる */

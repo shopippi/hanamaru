@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Button,
@@ -61,11 +61,23 @@ export function Home() {
   const { state, reload, data } = useLoad(() => api.get<HomeData>(`/students/${current.id}/home`), [current.id]);
 
   // 決済画面から戻ったら、入金確定の通知が届くまで数秒おきに確かめる（PY-05、PW-06）
+  const [polls, setPolls] = useState(0);
+  const waitingPayment = checkout === 'done' && !!data && data.payment !== 'paid' && data.payment !== 'none' && polls < 40;
   useEffect(() => {
-    if (checkout !== 'done' || !data || data.payment !== 'confirming') return;
-    const t = setTimeout(reload, 3000);
+    if (!waitingPayment) return;
+    const t = setTimeout(() => (setPolls((n) => n + 1), reload()), 3000);
     return () => clearTimeout(t);
-  }, [checkout, data, reload]);
+  }, [waitingPayment, data, reload]);
+
+  // コンビニ・PayPay の今月分の決済画面を開く（PY-16）。メールのリンク（?billing=pay）からも開く
+  const monthlyPay = useAction(async () => {
+    try {
+      const { url } = await api.post<{ url: string }>(`/students/${current.id}/monthly-payment`);
+      location.assign(url);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '開けませんでした', 'error');
+    }
+  });
 
   const portal = useAction(async () => {
     try {
@@ -103,6 +115,10 @@ export function Home() {
       setParams({}, { replace: true });
       void register.run();
     }
+    if (params.get('billing') === 'pay') {
+      setParams({}, { replace: true });
+      void monthlyPay.run();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -129,8 +145,11 @@ export function Home() {
               </div>
             </Warning>
           )}
-          {checkout === 'done' && h.payment === 'confirming' && (
-            <Notice icon={<IconClock />}>お支払いを確認しています。確認できると回数が付きます。この画面のままお待ちください。</Notice>
+          {checkout === 'done' && h.payment !== 'paid' && h.payment !== 'none' && (
+            <Notice icon={<IconClock />}>
+              お支払いを確認しています。確認できると回数が付きます。この画面のままお待ちください。
+              {h.paymentLinkAvailable && 'コンビニ払いの場合は、店頭でお支払いいただいたあとに回数が付きます。'}
+            </Notice>
           )}
           {h.student.status === 'enrolling' ? (
             <section className="card hero stack">
@@ -208,7 +227,16 @@ export function Home() {
                     <p>
                       <span className={h.payment === 'failed' || h.payment === 'unpaid' ? 'badge badge-strong' : 'badge badge-dot'}>{PAYMENT_LABEL[h.payment]}</span>
                     </p>
-                    {(h.payment === 'failed' || h.autopay) && !h.needsCard && (
+                    {h.paymentLinkAvailable ? (
+                      <Button variant={h.payment === 'failed' ? 'primary' : 'secondary'} onClick={() => void monthlyPay.run()} pending={monthlyPay.pending} pendingLabel="開いています…">
+                        お支払い画面を開く
+                      </Button>
+                    ) : h.cardPaymentDue && !h.needsCard ? (
+                      <Button variant={h.payment === 'failed' ? 'primary' : 'secondary'} onClick={() => void register.run()} pending={register.pending} pendingLabel="開いています…">
+                        <IconCard size={18} />
+                        今月分をカードで払う
+                      </Button>
+                    ) : (h.payment === 'failed' || h.autopay) && !h.needsCard && (
                       <Button variant={h.payment === 'failed' ? 'primary' : 'quiet'} onClick={() => void portal.run()} pending={portal.pending}>
                         <IconCard size={18} />
                         カードを変更する

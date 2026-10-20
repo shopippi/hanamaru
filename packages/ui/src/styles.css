@@ -50,7 +50,9 @@
   --s10: 40px;
   --tap: 44px;
 
-  --font: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic UI', 'Meiryo', sans-serif;
+  /* 日本でなじみのあるゴシック体（UI-03）。英数字も同じ書体でそろえる。
+     iPhone・Mac: ヒラギノ角ゴ / Windows: メイリオ / Android: Noto Sans JP（端末の標準） */
+  --font: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Meiryo', 'Noto Sans JP', 'Noto Sans CJK JP', sans-serif;
   --ease: cubic-bezier(0.2, 0, 0, 1);
 
   color-scheme: light;
@@ -1641,6 +1643,12 @@ legend {
   margin: 0;
   font-weight: 600;
 }
+/* 文章で説明する一覧（契約の内容など）は、読みやすい太さにする */
+.summary.prose dd {
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.7;
+}
 
 /* --- 0件のとき（UI-12） ---------------------------------------------------------- */
 
@@ -1724,6 +1732,7 @@ details[open] > summary::after {
   padding: var(--s10) var(--s4) var(--s8);
 }
 .auth-brand {
+  text-decoration: none;
   display: flex;
   align-items: center;
   gap: var(--s2);

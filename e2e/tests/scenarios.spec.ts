@@ -27,9 +27,25 @@ async function studentPage(browser: Browser) {
   return page;
 }
 
+/**
+ * 空き枠が nth+1 個以上ある日を選ぶ。実際の時計で動くので、時刻によっては最初の日の枠が締切で減っている
+ */
+async function pickDayWithSlots(page: Page, nth: number) {
+  await page.locator('.date-chip').first().waitFor();
+  for (const chip of await page.locator('.date-chip').all()) {
+    const n = Number(/空き(\d+)枠/.exec((await chip.getAttribute('aria-label')) ?? '')?.[1] ?? 0);
+    if (n > nth) {
+      await chip.click();
+      return;
+    }
+  }
+  throw new Error(`空き枠が${nth + 1}個以上ある日がありません`);
+}
+
 /** 最初の空き枠を予約し、予約した日時の文字列を返す */
 async function bookFirstSlot(page: Page, nth = 0) {
   await page.goto(`${STUDENT}/book`);
+  await pickDayWithSlots(page, nth);
   const slot = page.locator('.slot-grid .choice').nth(nth);
   const label = (await slot.getAttribute('aria-label'))!;
   await slot.click();
@@ -89,6 +105,7 @@ test('ST-01 / AU-03 / PY-01〜05 / SR-02 / OP-04 / MB-03 / UI-12 管理者が登
   await s.getByRole('button', { name: 'ログイン' }).click();
   await s.getByRole('link', { name: '入会手続きへ進む' }).click();
   await expect(s.getByText('（税込）').first()).toBeVisible(); // MB-03
+  await s.getByLabel('契約の内容と利用規約に同意します').check();
   await s.getByRole('button', { name: /を支払う/ }).click();
   await s.getByRole('button', { name: 'テストで支払う' }).click();
   await expect(s).toHaveURL(/checkout=done/);
@@ -147,6 +164,7 @@ test('RS-04 生徒は締切前なら日時を変更でき、回数は新しい�
   await s.getByRole('link', { name: '予約一覧' }).click();
   await s.getByRole('link', { name: '日時を変更' }).first().click();
   await expect(s.getByRole('heading', { name: '日時を変更する' })).toBeVisible();
+  await pickDayWithSlots(s, 1);
   await s.locator('.slot-grid .choice').nth(1).click();
   await s.getByRole('dialog').getByRole('button', { name: '変更する' }).click();
   await expect(s.getByText('日時を変更しました')).toBeVisible();

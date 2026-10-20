@@ -14,6 +14,18 @@ import { billingMonthOf } from '../lib/time.js';
 const unix = (d: Date) => Math.floor(d.getTime() / 1000);
 const idOf = (x: string | { id: string } | null | undefined) => (typeof x === 'string' ? x : (x?.id ?? null));
 
+/** こちらで扱う Stripe の通知の種類。Webhook の送信先にはこれだけを登録する（scripts/stripe-setup.ts） */
+export const WEBHOOK_EVENTS = [
+  'checkout.session.completed',
+  'checkout.session.async_payment_succeeded',
+  'checkout.session.async_payment_failed',
+  'checkout.session.expired',
+  'customer.subscription.deleted',
+  'invoice.paid',
+  'invoice.payment_failed',
+  'invoice.payment_action_required',
+] as const satisfies readonly Stripe.WebhookEndpointCreateParams.EnabledEvent[];
+
 export class StripeGateway implements PaymentGateway {
   private readonly stripe: Stripe;
 
@@ -22,8 +34,10 @@ export class StripeGateway implements PaymentGateway {
     private readonly webhookSecret: string,
     /** 解約の操作を出さないカスタマーポータルの設定（scripts/stripe-setup.ts で作る） */
     private readonly portalConfigurationId: string | undefined,
+    /** 接続先の差し替え（検証用の stripe-mock など）。本番では指定しない */
+    connection?: Pick<Stripe.StripeConfig, 'host' | 'port' | 'protocol'>,
   ) {
-    this.stripe = new Stripe(secretKey);
+    this.stripe = new Stripe(secretKey, { ...connection });
   }
 
   async createCustomer(input: { name: string; email: string | null; studentId: string }): Promise<string> {
@@ -58,7 +72,7 @@ export class StripeGateway implements PaymentGateway {
         success_url: req.successUrl,
         cancel_url: req.cancelUrl,
       },
-      { idempotencyKey: `checkout-${req.paymentId}` },
+      { idempotencyKey: req.replaces ? `checkout-${req.paymentId}-${req.replaces}` : `checkout-${req.paymentId}` },
     );
     if (!session.url) throw new Error('checkout session has no url');
     return { id: session.id, url: session.url };
@@ -232,7 +246,9 @@ export class StripeGateway implements PaymentGateway {
         return { id: event.id, type: 'subscription_deleted', subscriptionId: event.data.object.id };
       }
       case 'invoice.paid':
-      case 'invoice.payment_failed': {
+      case 'invoice.payment_failed':
+      // 自動課金で本人認証（3-D セキュア）が求められた: 生徒の操作が要るので、失敗と同じにお知らせする（PY-11）
+      case 'invoice.payment_action_required': {
         const inv = event.data.object;
         const subscriptionId = idOf(inv.parent?.subscription_details?.subscription);
         const start = inv.lines.data[0]?.period.start;

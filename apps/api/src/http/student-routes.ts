@@ -8,7 +8,7 @@ import {
   reservationsOfStudent,
   slotsForStudent,
 } from '../domain/booking.js';
-import { billingPortal, enrollmentOptions, startCardRegistration, startEnrollment } from '../domain/billing.js';
+import { billingPortal, enrollmentOptions, startCardRegistration, startEnrollment, startMonthlyPayment } from '../domain/billing.js';
 import { listLessonTypes } from '../domain/catalog.js';
 import { DomainError } from '../domain/errors.js';
 import { myStudents, studentHome } from '../domain/home.js';
@@ -98,10 +98,11 @@ export function studentRoutes(deps: AppDeps) {
   // 入会手続き・支払い（PY-01〜05）。Stripe の決済画面の URL を返す
   app.get('/students/:sid/enrollment', async (c) => c.json(await enrollmentOptions(ctx, c.get('actor'), c.req.param('sid'))));
   app.post('/students/:sid/enrollment', async (c) => {
-    const input = await body(c, z.object({ packageId: z.string().uuid(), method: z.enum(['card', 'konbini', 'paypay']) }));
+    const input = await body(c, z.object({ packageId: z.string().uuid(), method: z.enum(['card', 'konbini', 'paypay']), agreed: z.boolean() }));
     return c.json(await startEnrollment(ctx, c.get('actor'), c.req.param('sid'), input));
   });
   // カードの変更は Stripe のカード管理画面で（MB-04）
+  app.post('/students/:sid/monthly-payment', async (c) => c.json(await startMonthlyPayment(ctx, c.get('actor'), c.req.param('sid'))));
   app.post('/students/:sid/card-registration', async (c) => c.json(await startCardRegistration(ctx, c.get('actor'), c.req.param('sid'))));
   app.post('/students/:sid/billing-portal', async (c) => c.json(await billingPortal(ctx, c.get('actor'), c.req.param('sid'))));
 
