@@ -107,7 +107,9 @@ export function requireAuth(deps: AppDeps, portal: Portal, opts: { allowMfaPendi
  */
 const jsonOnly: MiddlewareHandler = async (c, next) => {
   const m = c.req.method;
-  if (m !== 'GET' && m !== 'HEAD' && m !== 'OPTIONS') {
+  // 本文のない DELETE はそのまま通す。DELETE は別サイトからはブラウザの事前確認なしに送れない
+  const bodyless = m === 'DELETE' && !c.req.header('content-type') && !Number(c.req.header('content-length') ?? 0) && !c.req.header('transfer-encoding');
+  if (m !== 'GET' && m !== 'HEAD' && m !== 'OPTIONS' && !bodyless) {
     const type = c.req.header('content-type') ?? '';
     if (!type.startsWith('application/json')) {
       return c.json({ error: '送信形式が正しくありません', code: 'validation' }, 415);

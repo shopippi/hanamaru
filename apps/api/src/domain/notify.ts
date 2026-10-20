@@ -3,6 +3,15 @@ import { notifications } from '../db/schema.js';
 import type { Db } from '../db/client.js';
 import { getSettings, type NotificationType } from './settings.js';
 
+/** 止めるとログインできなくなる通知。設定で「送らない」にしていても送る（NT-02 の例外） */
+export const ALWAYS_SENT: readonly NotificationType[] = ['invite', 'password_reset'];
+
+/**
+ * 送信記録（notifications）とバックアップに、招待・再設定のリンクを残さない。
+ * リンクを知っている人は、そのアカウントのパスワードを設定できてしまうため
+ */
+export const redactSecrets = (text: string) => text.replace(/([?&]token=)[^\s&]+/g, '$1（記録しません）');
+
 // 通知（3.6）。送信手段（Channel）を差し替えられる作りにする（NT-03）。
 // 新しい手段（LINE、ホーム画面アプリのプッシュ通知など）は Channel を1つ実装して channels に足すだけで送れる。
 
@@ -35,7 +44,7 @@ export class NotificationService implements Notifier {
 
   async send(type: NotificationType, recipient: Recipient, message: Message): Promise<void> {
     const settings = await getSettings(this.db);
-    const enabled = settings.notifications[type] !== false; // NT-02
+    const enabled = ALWAYS_SENT.includes(type) || settings.notifications[type] !== false; // NT-02
     for (const channel of this.channels) {
       const address = channel.address(recipient);
       if (!address) continue;
@@ -46,7 +55,7 @@ export class NotificationService implements Notifier {
           type,
           recipient: address,
           subject: message.subject,
-          body: message.body,
+          body: redactSecrets(message.body),
           status: enabled ? 'pending' : 'skipped',
         })
         .returning({ id: notifications.id });

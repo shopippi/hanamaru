@@ -91,7 +91,7 @@ describe('PY-03 / PY-05 入会の支払い', () => {
     expect(s.status).toBe('active');
     expect(await balance(f.db, student.id, '2026-10')).toBe(4);
     expect(subs(f)).toEqual([
-      expect.objectContaining({ startAt: jst('2026-11-01'), paymentMethodId: 'pm_card_visa', cancelAtPeriodEnd: false }),
+      expect.objectContaining({ startAt: jst('2026-11-01', '09:00'), paymentMethodId: 'pm_card_visa', cancelAtPeriodEnd: false }),
     ]);
     expect(s.stripeSubscriptionId).toBe(subs(f)[0]!.id);
     // 入会セットの支払い確定で「在籍中」になったことが操作記録に残る（SR-02）
@@ -230,7 +230,7 @@ describe('PY-10 / PY-11 / 3.4 決済の失敗と猶予期間', () => {
     expect(mail.subject).toContain('お支払いができませんでした');
     expect(mail.text).toContain('https://invoice.stripe.test/in_f');
     expect(mail.text).toContain('https://student.example.test/?billing=update');
-    expect(mail.text).toContain('11月8日（日）までに');
+    expect(mail.text).toContain('11月7日（土）までに');
 
     f.clock.now = jst('2026-11-07', '10:00');
     expect(await expireUnpaid(f.ctx)).toBe(0);
@@ -271,7 +271,7 @@ describe('PY-12 / PY-13 / ST-05 兄弟・解約', () => {
     expect(await f.db.select().from(payments).where(eq(payments.kind, 'monthly'))).toHaveLength(0);
     await changeStudentStatus(f.ctx, f.admin, student.id, 'active');
     expect(subs(f)).toHaveLength(2);
-    expect(subs(f)[1]!.startAt).toEqual(jst('2026-12-01'));
+    expect(subs(f)[1]!.startAt).toEqual(jst('2026-12-01', '09:00'));
   });
 
   test('PY-13 / MB-04 生徒の画面には解約の操作がなく、カードの変更は Stripe の画面へのリンクで行う', async () => {

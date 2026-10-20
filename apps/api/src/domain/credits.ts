@@ -117,9 +117,17 @@ export async function closeMonth(ctx: Ctx, month: Month): Promise<void> {
     .from(creditLedger)
     .where(eq(creditLedger.month, month))
     .groupBy(creditLedger.studentId);
+  // すでにこの月から繰り越した回数。締めたあとの返金などで再び締めても、上限を超えて繰り越さない
+  const carried = await ctx.db
+    .select({ studentId: creditLedger.studentId, total: sql<number>`sum(${creditLedger.delta})::int` })
+    .from(creditLedger)
+    .where(and(eq(creditLedger.month, next), eq(creditLedger.reason, 'carryover')))
+    .groupBy(creditLedger.studentId);
+  const carriedOf = new Map(carried.map((c) => [c.studentId, c.total]));
   for (const r of rows) {
     if (r.total <= 0) continue;
-    const carry = settings.carryoverEnabled ? Math.min(r.total, settings.carryoverMax) : 0;
+    const room = Math.max(0, settings.carryoverMax - (carriedOf.get(r.studentId) ?? 0));
+    const carry = settings.carryoverEnabled ? Math.min(r.total, room) : 0;
     await ctx.db.transaction(async (tx) => {
       await addLedger(tx, {
         studentId: r.studentId,
