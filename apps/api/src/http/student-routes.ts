@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import {
   bookAsStudent,
@@ -13,6 +13,7 @@ import { listLessonTypes } from '../domain/catalog.js';
 import { DomainError } from '../domain/errors.js';
 import { myStudents, studentHome } from '../domain/home.js';
 import { register, registrationOptions, teacherProfilesForStudent } from '../domain/registration.js';
+import { bookPublicTrial, publicTrialSlots, submitTrialRequest } from '../domain/trial.js';
 import { body, rawBody, dateParam, isoDateTime, query, requireAuth, type AppDeps, type Env } from './app.js';
 import { authRoutes } from './auth-routes.js';
 
@@ -39,6 +40,27 @@ export function studentRoutes(deps: AppDeps) {
     }
     await register(ctx, raw);
     return c.json({ ok: true }, 201);
+  });
+
+  // 体験レッスン（3.7）。ログインなしで使える。フォームには Turnstile を付ける（NF-06）
+  const captchaOk = async (c: Context<Env>, raw: unknown) => {
+    const token = (raw as { captchaToken?: string } | null)?.captchaToken;
+    if (!(await deps.captcha.verify(token, c.req.header('cf-connecting-ip')))) {
+      throw new DomainError('validation', '確認に失敗しました。もう一度お試しください');
+    }
+  };
+  app.post('/trial/requests', async (c) => {
+    const raw = await rawBody(c);
+    await captchaOk(c, raw);
+    return c.json(await submitTrialRequest(ctx, raw), 201);
+  });
+  app.get('/trial/slots', async (c) => c.json(await publicTrialSlots(ctx)));
+  app.post('/trial/reservations', async (c) => {
+    const raw = (await rawBody(c)) as { slot?: unknown } | null;
+    await captchaOk(c, raw);
+    const slot = slotInput.safeParse(raw?.slot);
+    if (!slot.success) throw new DomainError('validation', '枠を選んでください');
+    return c.json(await bookPublicTrial(ctx, raw, slot.data), 201);
   });
 
   const auth = requireAuth(deps, 'student');
