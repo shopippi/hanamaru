@@ -65,6 +65,8 @@ export const settingsSchema = z.object({
   inviteTokenDays: z.number().int().min(1).max(30),
   /** 前日リマインドを送る時刻（時）（NT-01） */
   reminderHour: z.number().int().min(0).max(23),
+  /** レビュー1件の文字数の上限（RV-01） */
+  reviewMaxLength: z.number().int().min(50).max(10000),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -101,6 +103,7 @@ export const DEFAULT_SETTINGS: Settings = {
   resetTokenMinutes: 60,
   inviteTokenDays: 7,
   reminderHour: 9,
+  reviewMaxLength: 1000,
 };
 
 export async function getSettings(db: Db): Promise<Settings> {
