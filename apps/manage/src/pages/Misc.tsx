@@ -1,0 +1,536 @@
+import { useState } from 'react';
+import {
+  Button,
+  Checkbox,
+  ConfirmDialog,
+  Empty,
+  Loadable,
+  Notice,
+  Select,
+  Skeleton,
+  TextField,
+  WEEKDAY_LABELS,
+  dateKey,
+  fmtDateKey,
+  fmtDateTime,
+  fmtTime,
+  useAction,
+  useLoad,
+  useToast,
+} from '@hanamaru/ui';
+import { api, type LessonType, type Slot, type Teacher } from '../api.js';
+
+// 体験の申込（TR-01）、休講（AV-04）、設定（3.8）、操作記録（OP-03）
+
+interface TrialRequest {
+  id: string;
+  name: string;
+  guardianName: string | null;
+  email: string;
+  phone: string | null;
+  instrument: string | null;
+  preferredTimes: string;
+  message: string;
+  status: 'new' | 'scheduled' | 'done' | 'cancelled';
+  createdAt: string;
+}
+const TRIAL_STATUS = { new: '新規', scheduled: '日時確定', done: '実施済み', cancelled: '取消' };
+
+export function Trials() {
+  const toast = useToast();
+  const { state, reload } = useLoad(() => Promise.all([api.get<TrialRequest[]>('/trial-requests'), api.get<Teacher[]>('/teachers'), api.get<LessonType[]>('/lesson-types')]), []);
+  const [booking, setBooking] = useState<string | null>(null);
+  const [teacherId, setTeacherId] = useState('');
+  const [date, setDate] = useState(dateKey(new Date()));
+  const slots = useLoad(() => (teacherId ? api.get<Slot[]>(`/slots?teacherId=${teacherId}&from=${date}&to=${date}`) : Promise.resolve([] as Slot[])), [teacherId, date]);
+  const act = useAction(async (fn: () => Promise<unknown>, msg: string) => {
+    try {
+      await fn();
+      toast(msg);
+      setBooking(null);
+      reload();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '操作できませんでした', 'error');
+    }
+  });
+  return (
+    <div className="stack-lg">
+      <h1>体験レッスンの申込</h1>
+      <Loadable state={state} reload={reload} skeleton={<Skeleton lines={8} />}>
+        {([list, teachers, types]) =>
+          list.length === 0 ? (
+            <Empty message="体験の申込はまだありません" />
+          ) : (
+            <ul className="list">
+              {list.map((t) => (
+                <li key={t.id} className="stack">
+                  <div>
+                    <strong>{t.name}</strong> <span className="badge">{TRIAL_STATUS[t.status]}</span>
+                    <span className="small muted">　{fmtDateTime(t.createdAt)}</span>
+                    <br />
+                    <span className="small">
+                      {t.guardianName && `保護者: ${t.guardianName}・`}
+                      <a href={`mailto:${t.email}`}>{t.email}</a>
+                      {t.phone && <>・<a href={`tel:${t.phone}`}>{t.phone}</a></>}
+                      {t.instrument && `・${t.instrument}`}
+                    </span>
+                    {t.preferredTimes && <p className="small" style={{ margin: 0 }}>希望: {t.preferredTimes}</p>}
+                    {t.message && <p className="small" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{t.message}</p>}
+                  </div>
+                  <div className="row">
+                    {t.status === 'new' && <Button onClick={() => setBooking(booking === t.id ? null : t.id)}>枠を押さえる</Button>}
+                    {t.status === 'scheduled' && (
+                      <Button variant="secondary" onClick={() => void act.run(() => api.post(`/trial-requests/${t.id}/status`, { status: 'done' }), '実施済みにしました')}>
+                        実施済みにする
+                      </Button>
+                    )}
+                    {t.status !== 'cancelled' && t.status !== 'done' && (
+                      <Button variant="ghost" onClick={() => void act.run(() => api.post(`/trial-requests/${t.id}/status`, { status: 'cancelled' }), '取り消しました')}>
+                        取り消す
+                      </Button>
+                    )}
+                  </div>
+                  {booking === t.id && (
+                    <div className="card stack">
+                      <div className="grid-2">
+                        <Select label="講師" value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
+                          <option value="">選んでください</option>
+                          {teachers.filter((x) => x.active).map((x) => (
+                            <option key={x.id} value={x.id}>
+                              {x.name}
+                            </option>
+                          ))}
+                        </Select>
+                        <TextField label="日付" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                      </div>
+                      <Loadable state={slots.state} reload={slots.reload} skeleton={<Skeleton lines={2} />}>
+                        {(s) => {
+                          const open = s.filter((x) => x.booked < x.capacity);
+                          return teacherId && open.length === 0 ? (
+                            <Empty message="この日は空いている枠がありません" />
+                          ) : (
+                            <div className="slot-grid">
+                              {open.map((x) => (
+                                <Button
+                                  key={x.startsAt + x.lessonTypeId}
+                                  variant="secondary"
+                                  onClick={() =>
+                                    void act.run(
+                                      () => api.post(`/trial-requests/${t.id}/reservations`, { teacherId, lessonTypeId: x.lessonTypeId, startsAt: x.startsAt }),
+                                      '予約しました。申込者に確定のメールを送りました',
+                                    )
+                                  }
+                                >
+                                  {fmtTime(x.startsAt)} {types.find((y) => y.id === x.lessonTypeId)?.name}
+                                </Button>
+                              ))}
+                            </div>
+                          );
+                        }}
+                      </Loadable>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )
+        }
+      </Loadable>
+    </div>
+  );
+}
+
+export function Closures() {
+  const toast = useToast();
+  const { state, reload } = useLoad(() => api.get<{ id: string; date: string; startTime: string | null; endTime: string | null; reason: string }[]>('/closures'), []);
+  const [form, setForm] = useState({ date: '', allDay: true, startTime: '10:00', endTime: '12:00', reason: '' });
+  const [confirm, setConfirm] = useState(false);
+  const create = useAction(async () => {
+    try {
+      const r = await api.post<{ cancelled: number }>('/closures', {
+        date: form.date,
+        startTime: form.allDay ? null : form.startTime,
+        endTime: form.allDay ? null : form.endTime,
+        reason: form.reason,
+      });
+      toast(r.cancelled ? `休講にしました。${r.cancelled}件の予約を取り消し、回数を戻しました` : '休講にしました');
+      setConfirm(false);
+      reload();
+    } catch (e) {
+      setConfirm(false);
+      toast(e instanceof Error ? e.message : '設定できませんでした', 'error');
+    }
+  });
+  const remove = useAction(async (id: string) => {
+    await api.del(`/closures/${id}`);
+    toast('休講を取り消しました（取り消した予約は戻りません）');
+    reload();
+  });
+  return (
+    <div className="stack-lg">
+      <h1>休講日・臨時休講</h1>
+      <div className="card stack">
+        <TextField label="日付" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+        <Checkbox label="終日" checked={form.allDay} onChange={(e) => setForm({ ...form, allDay: e.target.checked })} />
+        {!form.allDay && (
+          <div className="row">
+            <input aria-label="開始" type="time" step={900} className="input" style={{ width: 'auto' }} value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
+            <span>〜</span>
+            <input aria-label="終了" type="time" step={900} className="input" style={{ width: 'auto' }} value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} />
+          </div>
+        )}
+        <TextField label="理由" hint="例: 台風のため" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+        <Button onClick={() => setConfirm(true)} disabled={!form.date}>
+          休講にする
+        </Button>
+      </div>
+      <Loadable state={state} reload={reload} skeleton={<Skeleton lines={4} />}>
+        {(list) =>
+          list.length === 0 ? (
+            <Empty message="休講日はありません" />
+          ) : (
+            <ul className="list">
+              {list.map((c) => (
+                <li key={c.id} className="spread">
+                  <span>
+                    {fmtDateKey(c.date)}　{c.startTime ? `${c.startTime}〜${c.endTime}` : '終日'}　<span className="muted">{c.reason}</span>
+                  </span>
+                  <Button variant="ghost" onClick={() => void remove.run(c.id)}>
+                    削除
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )
+        }
+      </Loadable>
+      <ConfirmDialog open={confirm} title="休講にしますか" confirmLabel="休講にする" pending={create.pending} onCancel={() => setConfirm(false)} onConfirm={() => void create.run()}>
+        <p>この時間帯の予約はすべて「教室都合のキャンセル」として取り消し、回数を生徒に戻して、メールでお知らせします。</p>
+      </ConfirmDialog>
+    </div>
+  );
+}
+
+type Settings = {
+  businessHours: ({ open: string; close: string } | null)[];
+  publishWeeks: number;
+  reserveDeadlineHours: number;
+  changeDeadlineHours: number;
+  cancelDeadlineHours: number;
+  approvalRequired: boolean;
+  graceDays: number;
+  carryoverEnabled: boolean;
+  carryoverMax: number;
+  selfRegistration: boolean;
+  inviteCodeRegistration: boolean;
+  trialPublicSlots: boolean;
+  notifications: Record<string, boolean>;
+  sessionDays: number;
+  maxFailedLogins: number;
+  lockMinutes: number;
+  resetTokenMinutes: number;
+  inviteTokenDays: number;
+  reminderHour: number;
+};
+
+const NOTIFY_LABEL: Record<string, string> = {
+  reservation_confirmed: '予約の確定',
+  reservation_changed: '予約の変更',
+  reservation_cancelled: '予約のキャンセル',
+  reservation_reminder: '前日リマインド',
+  payment_succeeded: 'お支払いの確認',
+  payment_failed: 'お支払いの失敗',
+  payment_link: 'コンビニ・PayPay の支払いリンク',
+  invite: '招待',
+  password_reset: 'パスワード再設定',
+  trial_request: '体験レッスンの申込',
+};
+
+export function SettingsPage() {
+  const toast = useToast();
+  const { state, reload } = useLoad(() => api.get<Settings>('/settings'), []);
+  const [draft, setDraft] = useState<Settings | null>(null);
+  const save = useAction(async (s: Settings) => {
+    try {
+      await api.patch('/settings', s);
+      toast('設定を保存しました');
+      setDraft(null);
+      reload();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '保存できませんでした', 'error');
+    }
+  });
+  return (
+    <div className="stack-lg">
+      <h1>設定</h1>
+      <Loadable state={state} reload={reload} skeleton={<Skeleton lines={14} />}>
+        {(loaded) => {
+          const s = draft ?? loaded;
+          const set = <K extends keyof Settings>(k: K, v: Settings[K]) => setDraft({ ...s, [k]: v });
+          const numField = (k: keyof Settings, label: string, hint?: string) => (
+            <TextField label={label} hint={hint} inputMode="numeric" value={String(s[k])} onChange={(e) => set(k, Number(e.target.value.replace(/\D/g, '')) as never)} />
+          );
+          return (
+            <div className="stack-lg">
+              <section className="card stack">
+                <h2>営業日・時間</h2>
+                {s.businessHours.map((h, wd) => (
+                  <div key={wd} className="row">
+                    <strong style={{ width: 48 }}>{WEEKDAY_LABELS[wd]}</strong>
+                    <Checkbox
+                      label="営業"
+                      checked={!!h}
+                      onChange={(e) => set('businessHours', s.businessHours.map((x, i) => (i === wd ? (e.target.checked ? { open: '10:00', close: '21:00' } : null) : x)))}
+                    />
+                    {h && (
+                      <>
+                        <input aria-label={`${WEEKDAY_LABELS[wd]}曜の開始`} type="time" className="input" style={{ width: 'auto' }} value={h.open} onChange={(e) => set('businessHours', s.businessHours.map((x, i) => (i === wd ? { ...h, open: e.target.value } : x)))} />
+                        <span>〜</span>
+                        <input aria-label={`${WEEKDAY_LABELS[wd]}曜の終了`} type="time" className="input" style={{ width: 'auto' }} value={h.close} onChange={(e) => set('businessHours', s.businessHours.map((x, i) => (i === wd ? { ...h, close: e.target.value } : x)))} />
+                      </>
+                    )}
+                  </div>
+                ))}
+                {numField('publishWeeks', '生徒に予約を公開する期間（週）')}
+              </section>
+              <section className="card stack">
+                <h2>予約のルール</h2>
+                <div className="grid-2">
+                  {numField('reserveDeadlineHours', '予約の締切（レッスンの何時間前まで）')}
+                  {numField('changeDeadlineHours', '変更の締切（何時間前まで）')}
+                  {numField('cancelDeadlineHours', 'キャンセルの締切（何時間前まで）', 'これより後のキャンセルは回数が戻りません')}
+                </div>
+                <Checkbox label="予約を管理者の承認制にする（承認まで「仮予約」）" checked={s.approvalRequired} onChange={(e) => set('approvalRequired', e.target.checked)} />
+              </section>
+              <section className="card stack">
+                <h2>料金・回数</h2>
+                <div className="grid-2">
+                  {numField('graceDays', '未払いの猶予期間（日）')}
+                  {numField('carryoverMax', '翌月に繰り越せる回数の上限')}
+                </div>
+                <Checkbox label="余った回数を翌月に繰り越す" checked={s.carryoverEnabled} onChange={(e) => set('carryoverEnabled', e.target.checked)} />
+              </section>
+              <section className="card stack">
+                <h2>生徒の登録・体験</h2>
+                <Checkbox label="自己登録を受け付ける（管理者の承認が必要）" checked={s.selfRegistration} onChange={(e) => set('selfRegistration', e.target.checked)} />
+                <Checkbox label="招待コードでの登録を受け付ける" checked={s.inviteCodeRegistration} onChange={(e) => set('inviteCodeRegistration', e.target.checked)} />
+                <Checkbox label="体験専用の枠を一般に公開する" checked={s.trialPublicSlots} onChange={(e) => set('trialPublicSlots', e.target.checked)} />
+              </section>
+              <section className="card stack">
+                <h2>通知（メール）</h2>
+                {Object.entries(NOTIFY_LABEL).map(([k, label]) => (
+                  <Checkbox key={k} label={label} checked={s.notifications[k] !== false} onChange={(e) => set('notifications', { ...s.notifications, [k]: e.target.checked })} />
+                ))}
+                {numField('reminderHour', '前日リマインドを送る時刻（時）')}
+              </section>
+              <section className="card stack">
+                <h2>ログイン</h2>
+                <div className="grid-2">
+                  {numField('sessionDays', 'ログイン状態を保つ日数')}
+                  {numField('maxFailedLogins', 'ログインの失敗回数の上限')}
+                  {numField('lockMinutes', '上限に達したときのロック（分）')}
+                  {numField('resetTokenMinutes', '再設定リンクの有効時間（分）')}
+                  {numField('inviteTokenDays', '招待リンクの有効日数')}
+                </div>
+              </section>
+              <div className="row" style={{ position: 'sticky', bottom: 16 }}>
+                <Button onClick={() => void save.run(s)} pending={save.pending} disabled={!draft}>
+                  設定を保存する
+                </Button>
+                {draft && (
+                  <Button variant="secondary" onClick={() => setDraft(null)}>
+                    元に戻す
+                  </Button>
+                )}
+              </div>
+              <Catalog />
+              <InviteCodes />
+            </div>
+          );
+        }}
+      </Loadable>
+    </div>
+  );
+}
+
+function Catalog() {
+  const toast = useToast();
+  const { state, reload } = useLoad(() => Promise.all([api.get<LessonType[]>('/lesson-types'), api.get<{ id: string; name: string; active: boolean }[]>('/rooms')]), []);
+  const [lt, setLt] = useState({ name: '', kind: 'private', durationMinutes: '45', capacity: '1' });
+  const [room, setRoom] = useState('');
+  const run = useAction(async (fn: () => Promise<unknown>, msg: string) => {
+    try {
+      await fn();
+      toast(msg);
+      reload();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '保存できませんでした', 'error');
+    }
+  });
+  return (
+    <Loadable state={state} reload={reload} skeleton={<Skeleton lines={6} />}>
+      {([types, rooms]) => (
+        <div className="grid-2">
+          <section className="card stack">
+            <h2>レッスン種別</h2>
+            <ul className="list">
+              {types.map((t) => (
+                <li key={t.id} className="spread">
+                  <span>
+                    {t.name}（{t.kind === 'group' ? `グループ・定員${t.capacity}` : '個人'}・{t.durationMinutes}分）{!t.active && '・停止中'}
+                  </span>
+                  <Button variant="ghost" onClick={() => void run.run(() => api.patch(`/lesson-types/${t.id}`, { ...t, active: !t.active }), '保存しました')}>
+                    {t.active ? '停止' : '再開'}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <TextField label="名前" hint="例: 個人 45分" value={lt.name} onChange={(e) => setLt({ ...lt, name: e.target.value })} />
+            <Select label="種類" value={lt.kind} onChange={(e) => setLt({ ...lt, kind: e.target.value })}>
+              <option value="private">個人</option>
+              <option value="group">グループ</option>
+            </Select>
+            <TextField label="時間（分）" inputMode="numeric" value={lt.durationMinutes} onChange={(e) => setLt({ ...lt, durationMinutes: e.target.value })} />
+            {lt.kind === 'group' && <TextField label="定員" inputMode="numeric" value={lt.capacity} onChange={(e) => setLt({ ...lt, capacity: e.target.value })} />}
+            <Button
+              variant="secondary"
+              disabled={!lt.name}
+              onClick={() => void run.run(() => api.post('/lesson-types', { name: lt.name, kind: lt.kind, durationMinutes: Number(lt.durationMinutes), capacity: Number(lt.capacity) }), 'レッスン種別を追加しました')}
+            >
+              追加する
+            </Button>
+          </section>
+          <section className="card stack">
+            <h2>教室（部屋）</h2>
+            <ul className="list">
+              {rooms.map((r) => (
+                <li key={r.id} className="spread">
+                  <span>
+                    {r.name}
+                    {!r.active && '・停止中'}
+                  </span>
+                  <Button variant="ghost" onClick={() => void run.run(() => api.patch(`/rooms/${r.id}`, { name: r.name, active: !r.active }), '保存しました')}>
+                    {r.active ? '停止' : '再開'}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <TextField label="名前" value={room} onChange={(e) => setRoom(e.target.value)} />
+            <Button variant="secondary" disabled={!room} onClick={() => void run.run(async () => (await api.post('/rooms', { name: room }), setRoom('')), '教室を追加しました')}>
+              追加する
+            </Button>
+          </section>
+        </div>
+      )}
+    </Loadable>
+  );
+}
+
+function InviteCodes() {
+  const toast = useToast();
+  const { state, reload } = useLoad(() => api.get<{ id: string; code: string; expiresAt: string | null; maxUses: number | null; usedCount: number; active: boolean }[]>('/invite-codes'), []);
+  const create = useAction(async () => {
+    await api.post('/invite-codes', { validDays: 30 });
+    toast('招待コードを作りました（30日間有効）');
+    reload();
+  });
+  const stop = useAction(async (id: string) => {
+    await api.del(`/invite-codes/${id}`);
+    reload();
+  });
+  return (
+    <section className="card stack">
+      <h2>招待コード</h2>
+      <Notice>入会時にお渡しするコードです。「招待コードでの登録」を ON にすると使えます。</Notice>
+      <Loadable state={state} reload={reload} skeleton={<Skeleton lines={3} />}>
+        {(list) => (
+          <ul className="list">
+            {list.map((c) => (
+              <li key={c.id} className="spread">
+                <span>
+                  <strong className="num" style={{ letterSpacing: 2 }}>{c.code}</strong>
+                  <span className="small muted">
+                    　{c.active ? (c.expiresAt ? `${fmtDateTime(c.expiresAt)}まで` : '期限なし') : '停止中'}・{c.usedCount}回使用
+                  </span>
+                </span>
+                {c.active && (
+                  <Button variant="ghost" onClick={() => void stop.run(c.id)}>
+                    停止
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Loadable>
+      <Button variant="secondary" onClick={() => void create.run()} pending={create.pending}>
+        招待コードを作る
+      </Button>
+    </section>
+  );
+}
+
+const ACTION_LABEL: Record<string, string> = {
+  'student.create': '生徒の登録',
+  'student.update': '生徒情報の変更',
+  'student.status': '状態の変更',
+  'student.approve': '登録の承認',
+  'student.teachers': '担当講師の変更',
+  'student.note.admin': '管理用備考の変更',
+  'student.note.teacher': '講師用備考の変更',
+  'credits.adjust': '回数の手動調整',
+  'payment.cash': '現金の入金記録',
+  'settings.update': '設定の変更',
+  'reservation.create': '代理予約',
+  'reservation.cancel': '予約の取消',
+  'reservation.approve': '仮予約の承認',
+  'reservation.reject': '仮予約の却下',
+  'reservation.attendance': '出欠',
+  'reservation.series.create': '繰り返し予約',
+  'availability.change': '空き時間の変更',
+  'closure.create': '休講',
+  'closure.delete': '休講の取消',
+  'course.price': '料金の改定',
+};
+
+export function Audit() {
+  const { state, reload } = useLoad(() => api.get<{ id: string; action: string; targetType: string; targetId: string | null; actorAccountId: string | null; createdAt: string; details: unknown }[]>('/audit-logs'), []);
+  return (
+    <div className="stack-lg">
+      <h1>操作記録</h1>
+      <p className="muted">入金記録、回数の調整、解約・休会、担当講師の変更、設定の変更などを、誰が・いつ・何をしたか記録しています（最新500件）。</p>
+      <Loadable state={state} reload={reload} skeleton={<Skeleton lines={10} />}>
+        {(list) =>
+          list.length === 0 ? (
+            <Empty message="操作記録はありません" />
+          ) : (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th scope="col">日時</th>
+                    <th scope="col">操作</th>
+                    <th scope="col">操作した人</th>
+                    <th scope="col">内容</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map((l) => (
+                    <tr key={l.id}>
+                      <td>{fmtDateTime(l.createdAt)}</td>
+                      <td>{ACTION_LABEL[l.action] ?? l.action}</td>
+                      <td>{l.actorAccountId ? '管理者' : '自動処理'}</td>
+                      <td className="small">
+                        <code style={{ wordBreak: 'break-all' }}>{JSON.stringify(l.details)}</code>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        }
+      </Loadable>
+    </div>
+  );
+}

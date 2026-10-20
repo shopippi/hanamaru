@@ -2,9 +2,17 @@
   {
     "slug": "sample-piano",
     "name": "見本 花子",
-    "photo": "/profiles/sample-piano.jpg",
+    "photo": null,
     "instruments": ["ピアノ"],
     "career": "（見本）音楽大学ピアノ科卒業。講師歴10年。",
     "message": "（見本）一人ひとりのペースに合わせて、楽しく続けられるレッスンを心がけています。"
+  },
+  {
+    "slug": "sample-guitar",
+    "name": "見本 次郎",
+    "photo": null,
+    "instruments": ["ギター", "ウクレレ"],
+    "career": "（見本）バンド活動を経て講師に。",
+    "message": "（見本）好きな曲から始めましょう。"
   }
 ]

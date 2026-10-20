@@ -39,6 +39,10 @@
   - `scripts/stripe-setup.ts` Stripe の初期設定（カスタマーポータル）
   - `data/teacher-profiles.json` 講師プロフィール（TC-06）
   - `test/` 受入テスト（PGlite のメモリ上の PostgreSQL で動く）
+- `apps/student/` 生徒の画面（ホーム画面アプリ、PWA）。`public/sw.js` が Service Worker
+- `apps/staff/` 講師の画面、`apps/manage/` 管理者の画面
+- `packages/ui/` 3つの画面で共通の部品・スタイル・API 呼び出し（UI-06）。UI-00〜19 の決まりはここで守る
+- `e2e/` 画面の通しテスト（Playwright）
 - `docs/` 要件定義書、検証報告、設計の決定（ADR）
 
 ## よく使うコマンド
@@ -48,4 +52,9 @@ pnpm install
 pnpm typecheck
 pnpm test                                   # すべての受入テスト
 pnpm --filter @hanamaru/api exec vitest run test/booking.test.ts -t RS-05
+pnpm dev                                    # 開発用サーバー（メモリ上のDB・テスト決済・ダミーデータ）と3つの画面
+pnpm e2e                                    # 画面の通しテスト
 ```
+
+開発用サーバーのログイン: 生徒 parent@example.test / 講師 teacher@example.test / 管理 admin@example.test（パスワードは password、管理者の確認コードは http://localhost:3000/dev/totp）。
+画面は 生徒 http://localhost:5173 ・講師 :5174 ・管理 :5175。

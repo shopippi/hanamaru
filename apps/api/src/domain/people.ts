@@ -405,6 +405,28 @@ export async function lessonsOfTeacher(ctx: Ctx, actor: Actor, from: Date, to: D
     .orderBy(asc(reservations.startsAt));
 }
 
+/** 担当レッスン1件（記録の入力画面用）。自分の担当でなければ見つからない */
+export async function lessonOfTeacher(ctx: Ctx, actor: Actor, reservationId: string) {
+  const teacher = await teacherOfActor(ctx.db, actor);
+  if (!teacher) throw forbidden();
+  const [row] = await ctx.db
+    .select({
+      id: reservations.id,
+      studentId: reservations.studentId,
+      studentName: students.name,
+      lessonTypeName: lessonTypes.name,
+      startsAt: reservations.startsAt,
+      endsAt: reservations.endsAt,
+      status: reservations.status,
+    })
+    .from(reservations)
+    .leftJoin(students, eq(students.id, reservations.studentId))
+    .innerJoin(lessonTypes, eq(lessonTypes.id, reservations.lessonTypeId))
+    .where(and(eq(reservations.id, reservationId), eq(reservations.teacherId, teacher.id)));
+  if (!row) throw notFound('レッスンが見つかりません');
+  return row;
+}
+
 // --- 講師の登録 ----------------------------------------------------------------------
 
 export const teacherInput = z.object({
