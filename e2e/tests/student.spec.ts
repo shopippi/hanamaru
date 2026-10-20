@@ -24,6 +24,8 @@ test('MB-01 / RS-01 / RS-04 / UI-15 トップで状況が分かり、予約し�
   await expect(page.getByText(/お支払い状況/)).toBeVisible();
 
   await page.getByRole('link', { name: '予約する' }).first().click();
+  // キャンセルの締切は前日20時。時刻に左右されないよう、3つ目の日（明後日以降）を選ぶ
+  await page.locator('.date-chip').nth(2).click();
   await page.locator('.slot-grid .choice').first().click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText('この内容で予約しますか')).toBeVisible();
@@ -52,7 +54,7 @@ test('ST-04 保護者は子どもを切り替えられる', async ({ page }) => 
 test('TC-05 担当講師のプロフィールを見られる', async ({ page }) => {
   await login(page, STUDENT, 'parent@example.test');
   await page.getByRole('link', { name: '講師' }).click();
-  await expect(page.getByRole('heading', { name: '見本 花子' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '松田 悠義' })).toBeVisible();
 });
 
 test('PW-04 電波がないときは案内を出し、予約できない', async ({ page, context }) => {
@@ -70,4 +72,15 @@ test('PW-01 / PW-02 ホーム画面アプリの設定', async ({ request }) => {
   expect(manifest).toMatchObject({ display: 'standalone', background_color: '#ffffff', start_url: '/', lang: 'ja' });
   for (const icon of manifest.icons) expect((await request.get(`${STUDENT}${icon.src}`)).ok()).toBe(true);
   expect((await request.get(`${STUDENT}/sw.js`)).ok()).toBe(true);
+});
+
+test('RS-09 ピアノは予約のときに対面かオンラインを選べる', async ({ page }) => {
+  await login(page, STUDENT, 'parent@example.test');
+  await page.goto(`${STUDENT}/book`);
+  const mode = page.getByRole('group', { name: '受け方' });
+  await expect(mode.getByRole('button', { name: '対面（教室）' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.slot-grid .choice').first()).toHaveAttribute('aria-label', /（対面）/);
+  await mode.getByRole('button', { name: 'オンライン' }).click();
+  await expect(page.getByText('参加用のURLは、講師からご連絡します。')).toBeVisible();
+  await expect(page.locator('.slot-grid .choice').first()).toHaveAttribute('aria-label', /（オンライン）/);
 });

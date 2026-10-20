@@ -7,6 +7,7 @@ import { setup } from './fixtures.js';
 describe('PY-07 回数の失効と繰越', () => {
   test('繰越なしの設定では、余った回数は月末で失効する', async () => {
     const f = await setup();
+    await updateSettings(f.db, { carryoverEnabled: false }, null);
     const { student } = await f.mkStudent('太郎', { credits: 4 });
     await closeMonth(f.ctx, '2026-10');
     expect(await balance(f.db, student.id, '2026-10')).toBe(0);

@@ -95,30 +95,53 @@ async function seed(db: Db, ctx: Ctx) {
     if (wd !== 0) hours.push({ date: d, startTime: '10:00', endTime: wd === 6 ? '18:00' : '21:00' });
   }
   await db.insert(schema.schoolHours).values(hours);
-  const [piano] = await db.insert(schema.lessonTypes).values({ name: '個人 45分', kind: 'private', durationMinutes: 45, capacity: 1 }).returning();
-  const [group] = await db.insert(schema.lessonTypes).values({ name: 'グループ 60分', kind: 'group', durationMinutes: 60, capacity: 4 }).returning();
+  // 教室の実際のレッスン（見本のデータ。本番では管理画面で登録する）
+  const [piano] = await db
+    .insert(schema.lessonTypes)
+    .values({ name: 'ポピュラーピアノ（対面）60分', kind: 'private', durationMinutes: 60, capacity: 1 })
+    .returning();
+  const [pianoOnline] = await db
+    .insert(schema.lessonTypes)
+    .values({ name: 'ポピュラーピアノ（オンライン）60分', kind: 'private', durationMinutes: 60, capacity: 1, online: true })
+    .returning();
+  const [drum] = await db.insert(schema.lessonTypes).values({ name: 'ドラム（対面）60分', kind: 'private', durationMinutes: 60, capacity: 1 }).returning();
+  const [trial] = await db.insert(schema.lessonTypes).values({ name: '体験レッスン 30分', kind: 'private', durationMinutes: 30, capacity: 1 }).returning();
   const [room1] = await db.insert(schema.rooms).values({ name: 'レッスン室1' }).returning();
 
   const mkTeacher = async (slug: string, name: string, email: string) => {
     const a = await mkAccount('teacher', email, name);
     return (await db.insert(schema.teachers).values({ accountId: a.id, name, profileSlug: slug }).returning())[0]!;
   };
-  const tA = await mkTeacher('sample-piano', '見本 花子', 'teacher@example.test');
+  const tA = await mkTeacher('matsuda', '松田 悠義', 'teacher@example.test');
+  // 2人目は講師の切り替え（TC-02）を試すための見本
   const tB = await mkTeacher('sample-guitar', '見本 次郎', 'teacher2@example.test');
   for (const wd of [1, 2, 3, 4, 5]) {
-    await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: wd, startTime: '15:00', endTime: '19:30', lessonTypeId: piano!.id, roomId: room1!.id });
+    await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: wd, startTime: '15:00', endTime: '20:00', lessonTypeId: piano!.id, roomId: room1!.id });
+    await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: wd, startTime: '20:00', endTime: '22:00', lessonTypeId: pianoOnline!.id });
   }
-  await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: 6, startTime: '10:00', endTime: '12:00', lessonTypeId: group!.id });
-  await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: 6, startTime: '13:00', endTime: '14:30', lessonTypeId: piano!.id, forTrial: true });
+  await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: 6, startTime: '10:00', endTime: '12:00', lessonTypeId: drum!.id, roomId: room1!.id });
+  await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: 6, startTime: '13:00', endTime: '14:30', lessonTypeId: trial!.id, forTrial: true });
   for (const wd of [2, 4]) {
-    await db.insert(schema.availabilityRules).values({ teacherId: tB.id, weekday: wd, startTime: '16:00', endTime: '20:00', lessonTypeId: piano!.id });
+    await db.insert(schema.availabilityRules).values({ teacherId: tB.id, weekday: wd, startTime: '16:00', endTime: '20:00', lessonTypeId: drum!.id });
   }
 
+  // 料金表（レギュラーレッスン、サブスク月額制）。入会金はなし。5回目からは +5,000円で1回ずつ
   const admin = { kind: 'system' as const };
-  const course = await createCourse(ctx, admin, { name: '月4回コース', lessonsPerMonth: 4, amount: 14300 });
-  await createCourse(ctx, admin, { name: '月2回コース', lessonsPerMonth: 2, amount: 7700 });
-  await savePackage(ctx, admin, null, { name: '入会金＋4回', admissionFee: 5500, lessonCount: 4, lessonsPrice: 14300, sortOrder: 1 });
-  await savePackage(ctx, admin, null, { name: '入会金＋2回', admissionFee: 5500, lessonCount: 2, lessonsPrice: 7700, sortOrder: 2 });
+  const plans = [
+    { n: 1, amount: 6000 },
+    { n: 2, amount: 11000 },
+    { n: 3, amount: 15000 },
+    { n: 4, amount: 20000 },
+    { n: 5, amount: 25000 },
+  ];
+  const courseOf = new Map<number, Awaited<ReturnType<typeof createCourse>>>();
+  for (const p of plans) courseOf.set(p.n, await createCourse(ctx, admin, { name: `1h×月${p.n}回コース`, lessonsPerMonth: p.n, amount: p.amount }));
+  // 入会のときは最初の月の月謝だけを払う（4回を最初に出す）
+  for (const [i, n] of [4, 3, 2, 1, 5].entries()) {
+    const p = plans.find((x) => x.n === n)!;
+    await savePackage(ctx, admin, null, { name: `1h×月${n}回（最初の月）`, admissionFee: 0, lessonCount: n, lessonsPrice: p.amount, sortOrder: i + 1 });
+  }
+  const course = courseOf.get(4)!;
 
   const parent = await mkAccount('student', 'parent@example.test', '山田 花子');
   const mkStudent = async (name: string, values: Partial<typeof schema.students.$inferInsert>, teacherIds: string[], credits = 0) => {

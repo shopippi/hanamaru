@@ -11,7 +11,7 @@ interface Options {
   packages: { id: string; name: string; lessonCount: number; admissionFee: number; lessonsPrice: number; total: number }[];
   course: { name: string; lessonsPerMonth: number; amount: number | null } | null;
   methods: { method: 'card' | 'konbini' | 'paypay'; label: string; recommended: boolean }[];
-  terms: { cancelDeadlineHours: number; graceDays: number };
+  terms: { cancelDeadlineHours: number; cancelDeadline: string; graceDays: number; carryover: boolean };
 }
 
 export function Enroll() {
@@ -66,7 +66,7 @@ export function Enroll() {
                     <span className="list-row-main">
                       <span className="list-title">{p.name}</span>
                       <span className="list-meta">
-                        入会金 {fmtYen(p.admissionFee)}＋レッスン{p.lessonCount}回 {fmtYen(p.lessonsPrice)}
+                        {p.admissionFee > 0 ? `入会金 ${fmtYen(p.admissionFee)}＋` : ''}レッスン{p.lessonCount}回 {fmtYen(p.lessonsPrice)}
                       </span>
                     </span>
                     <span className="choice-price num">
@@ -114,8 +114,14 @@ export function Enroll() {
                   </div>
                   <div>
                     <dt>キャンセル</dt>
-                    <dd>レッスンの{o.terms.cancelDeadlineHours}時間前までは回数をお戻しします。それより後のキャンセルと無断欠席は、回数を使います</dd>
+                    <dd>{o.terms.cancelDeadline}のキャンセルは回数をお戻しします。それより後のキャンセルと無断欠席は、回数を使います</dd>
                   </div>
+                  {o.terms.carryover && (
+                    <div>
+                      <dt>余った回数</dt>
+                      <dd>その月に使わなかった回数は、翌月末まで使えます</dd>
+                    </div>
+                  )}
                   <div>
                     <dt>未払い</dt>
                     <dd>毎月1日から{o.terms.graceDays}日たってもお支払いを確認できない場合、その月のご予約は取り消しになります</dd>

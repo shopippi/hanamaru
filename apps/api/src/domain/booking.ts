@@ -27,7 +27,7 @@ import { addLedger, availableCredits } from './credits.js';
 import { conflict, forbidden, notFound, ruleViolation } from './errors.js';
 import { listSlots, type Slot } from './availability.js';
 import { CANCEL_REASON_LABEL, messages } from './messages.js';
-import { getSettings, type Settings } from './settings.js';
+import { cancelDeadlineLabel, cancelDeadlineOf, getSettings, type Settings } from './settings.js';
 import type { Recipient, Message } from './notify.js';
 import type { NotificationType } from './settings.js';
 
@@ -209,8 +209,16 @@ async function insertReservation(
 
 async function describe(db: Db, r: Reservation) {
   const [t] = await db.select({ name: teachers.name }).from(teachers).where(eq(teachers.id, r.teacherId));
+  const [type] = await db.select({ name: lessonTypes.name, online: lessonTypes.online }).from(lessonTypes).where(eq(lessonTypes.id, r.lessonTypeId));
   const s = r.studentId ? await loadStudent(db, r.studentId) : null;
-  return { studentName: s?.name ?? '体験', teacherName: t?.name ?? '', startsAt: r.startsAt, student: s };
+  return {
+    studentName: s?.name ?? '体験',
+    teacherName: t?.name ?? '',
+    startsAt: r.startsAt,
+    lessonTypeName: type?.name,
+    online: type?.online ?? false,
+    student: s,
+  };
 }
 
 /** 予約を取り消す。refund なら使った回数を戻す（RS-04、PY-08） */
@@ -350,9 +358,9 @@ async function reservationForStudentActor(db: Db, actor: Actor, id: string): Pro
 export async function cancelPreview(ctx: Ctx, actor: Actor, reservationId: string) {
   const r = await reservationForStudentActor(ctx.db, actor, reservationId);
   const settings = await getSettings(ctx.db);
-  const deadline = new Date(r.startsAt.getTime() - settings.cancelDeadlineHours * HOUR_MS);
+  const deadline = cancelDeadlineOf(settings, r.startsAt);
   const late = ctx.now() > deadline;
-  return { reservationId: r.id, startsAt: r.startsAt, deadline, refund: !late };
+  return { reservationId: r.id, startsAt: r.startsAt, deadline, refund: !late, deadlineLabel: cancelDeadlineLabel(settings) };
 }
 
 /** 生徒のキャンセル。締切前なら回数を戻し（RS-04）、締切後は戻さない（RS-05） */
@@ -362,7 +370,7 @@ export async function cancelAsStudent(ctx: Ctx, actor: Actor, reservationId: str
   if (r.status === 'cancelled') throw conflict('この予約はすでに取り消されています');
   if (r.startsAt <= now) throw ruleViolation('開始時刻を過ぎた予約は取り消せません。教室にご連絡ください');
   const settings = await getSettings(ctx.db);
-  const late = now.getTime() > r.startsAt.getTime() - settings.cancelDeadlineHours * HOUR_MS;
+  const late = now.getTime() > cancelDeadlineOf(settings, r.startsAt).getTime();
   const kind: CancelKind = late ? 'student_late' : 'student';
   const result = await ctx.db.transaction((tx) => cancelInTx(tx, r, kind, !late, actor, now));
   await flush(ctx, await cancelNotices(ctx.db, r, kind, result.refunded, false));
@@ -430,6 +438,7 @@ export async function reservationsOfStudent(ctx: Ctx, actor: Actor, studentId: s
       teacherId: reservations.teacherId,
       teacherName: teachers.name,
       lessonTypeName: lessonTypes.name,
+      online: lessonTypes.online,
       startsAt: reservations.startsAt,
       endsAt: reservations.endsAt,
       status: reservations.status,

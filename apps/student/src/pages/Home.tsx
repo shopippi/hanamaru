@@ -178,6 +178,11 @@ export function Home() {
                     <span style={{ width: `${Math.min(100, (h.remaining / h.course.lessonsPerMonth) * 100)}%` }} />
                   </div>
                 )}
+                {h.carried > 0 && (
+                  <p className="small muted hero-foot">
+                    うち先月からの分 {h.carried}回（{fmtMonthShort(h.month)}末まで使えます）
+                  </p>
+                )}
                 {h.nextMonth.remaining > 0 && (
                   <p className="small muted hero-foot">
                     {fmtMonthShort(h.nextMonth.month)}分: あと{h.nextMonth.remaining}回予約できます
@@ -210,6 +215,7 @@ export function Home() {
                         </span>
                         <span className="list-meta">
                           {h.nextReservation.teacherName}・{h.nextReservation.lessonTypeName}
+                          {h.nextReservation.online && <span className="badge" style={{ marginLeft: 8 }}>オンライン</span>}
                           {h.nextReservation.status === 'pending' && <span className="badge" style={{ marginLeft: 8 }}>仮予約</span>}
                         </span>
                       </span>

@@ -35,6 +35,8 @@ export interface LessonType {
   kind: 'private' | 'group';
   durationMinutes: number;
   capacity: number;
+  /** オンラインのレッスン（RS-09） */
+  online: boolean;
   active: boolean;
 }
 
@@ -68,6 +70,8 @@ export interface ReservationRow {
   studentId: string | null;
   studentName: string | null;
   lessonTypeName: string;
+  /** オンラインのレッスン（RS-09） */
+  online?: boolean;
   trialRequestId: string | null;
 }
 

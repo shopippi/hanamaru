@@ -167,6 +167,8 @@ export const lessonTypes = pgTable('lesson_types', {
   durationMinutes: integer('duration_minutes').notNull(),
   /** 個人は1 */
   capacity: integer('capacity').notNull().default(1),
+  /** オンラインのレッスン（RS-09）。教室の受付時間に関係なく、講師の空き時間で予約できる */
+  online: boolean('online').notNull().default(false),
   active: boolean('active').notNull().default(true),
 });
 

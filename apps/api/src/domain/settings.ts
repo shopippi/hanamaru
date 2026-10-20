@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client.js';
 import { settings as settingsTable } from '../db/schema.js';
+import { addDays, dateOf, HOUR_MS, jst } from '../lib/time.js';
 
 // 管理者が画面から変えられる設定（3.8）。数値をコードに直接書かず、ここの既定値を初期値にする（2章の1）
 
@@ -28,6 +29,12 @@ export const settingsSchema = z.object({
   reserveDeadlineHours: z.number().int().min(0),
   changeDeadlineHours: z.number().int().min(0),
   cancelDeadlineHours: z.number().int().min(0),
+  /**
+   * キャンセルの締切の決め方（RS-04）。hoursBefore は「レッスンの N 時間前まで」（cancelDeadlineHours）、
+   * previousDayAt は「レッスンの前日の HH 時まで」（cancelDeadlinePrevDayHour。日本時間）
+   */
+  cancelDeadlineMode: z.enum(['hoursBefore', 'previousDayAt']),
+  cancelDeadlinePrevDayHour: z.number().int().min(0).max(23),
   /** 即確定か、管理者の承認制か（RS-06） */
   approvalRequired: z.boolean(),
   /** 未払いの猶予期間（PY-10）。初期値7日 */
@@ -75,10 +82,13 @@ export const DEFAULT_SETTINGS: Settings = {
   reserveDeadlineHours: 24,
   changeDeadlineHours: 24,
   cancelDeadlineHours: 24,
+  cancelDeadlineMode: 'previousDayAt',
+  cancelDeadlinePrevDayHour: 20,
   approvalRequired: false,
   graceDays: 7,
-  carryoverEnabled: false,
-  carryoverMax: 0,
+  // 余った回数は翌月末まで使える（教室の決まり: キャンセル分などは翌月まで振替できる）。繰り越した分は再び繰り越さない
+  carryoverEnabled: true,
+  carryoverMax: 99,
   selfRegistration: false,
   inviteCodeRegistration: false,
   trialPublicSlots: false,
@@ -131,4 +141,23 @@ export async function getSetting<K extends SettingKey>(db: Db, key: K): Promise<
 /** いま選べる支払い方法（設定で止めているものは除く）。現金は教室で受け取るので、ネットの支払いには使わない */
 export function enabledBillingMethods(settings: Settings): ('card' | 'konbini' | 'paypay' | 'cash')[] {
   return ['card', ...(settings.konbiniEnabled ? (['konbini'] as const) : []), ...(settings.paypayEnabled ? (['paypay'] as const) : []), 'cash'];
+}
+
+/**
+ * キャンセルの締切（RS-04）。これより後のキャンセルは回数が戻らない。
+ * previousDayAt は、レッスンの日（日本時間）の前の日の HH:00（日本時間）
+ */
+export function cancelDeadlineOf(settings: Settings, startsAt: Date): Date {
+  if (settings.cancelDeadlineMode === 'previousDayAt') {
+    const hour = String(settings.cancelDeadlinePrevDayHour).padStart(2, '0');
+    return jst(addDays(dateOf(startsAt), -1), `${hour}:00`);
+  }
+  return new Date(startsAt.getTime() - settings.cancelDeadlineHours * HOUR_MS);
+}
+
+/** 画面やメールに出すキャンセルの締切の言い方（「レッスンの前日20時まで」など） */
+export function cancelDeadlineLabel(settings: Settings): string {
+  return settings.cancelDeadlineMode === 'previousDayAt'
+    ? `レッスンの前日${settings.cancelDeadlinePrevDayHour}時まで`
+    : `レッスンの${settings.cancelDeadlineHours}時間前まで`;
 }

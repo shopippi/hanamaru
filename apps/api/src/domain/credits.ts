@@ -107,7 +107,8 @@ export async function ledgerOf(db: Db, studentId: string) {
 
 /**
  * 月が変わったときの失効と繰越（PY-07）。month は終わった月。
- * 余った回数は月末で失効し、繰越が有効なら上限までを翌月に移す。何度呼んでも結果は同じ。
+ * 余った回数は月末で失効し、繰越が有効なら上限までを翌月に移す（翌月末まで使える）。
+ * 予約は繰り越した回数から先に使ったものとみなし、繰り越した回数をさらに次の月へは移さない。何度呼んでも結果は同じ。
  */
 export async function closeMonth(ctx: Ctx, month: Month): Promise<void> {
   const settings = await getSettings(ctx.db);
@@ -124,10 +125,19 @@ export async function closeMonth(ctx: Ctx, month: Month): Promise<void> {
     .where(and(eq(creditLedger.month, next), eq(creditLedger.reason, 'carryover')))
     .groupBy(creditLedger.studentId);
   const carriedOf = new Map(carried.map((c) => [c.studentId, c.total]));
+  // この月に、自分の月として付いた回数（付与・調整）の合計。前の月から繰り越した分は含めない
+  const own = await ctx.db
+    .select({ studentId: creditLedger.studentId, total: sql<number>`sum(${creditLedger.delta})::int` })
+    .from(creditLedger)
+    .where(and(eq(creditLedger.month, month), inArray(creditLedger.reason, ['grant_monthly', 'grant_enrollment', 'adjust'])))
+    .groupBy(creditLedger.studentId);
+  const ownOf = new Map(own.map((o) => [o.studentId, o.total]));
   for (const r of rows) {
     if (r.total <= 0) continue;
     const room = Math.max(0, settings.carryoverMax - (carriedOf.get(r.studentId) ?? 0));
-    const carry = settings.carryoverEnabled ? Math.min(r.total, room) : 0;
+    // 予約は繰り越した回数から先に使う。残りのうち繰り越せるのは、この月の自分の分だけ（繰り越しは1か月まで）
+    const ownRemaining = Math.max(0, Math.min(r.total, ownOf.get(r.studentId) ?? 0));
+    const carry = settings.carryoverEnabled ? Math.min(ownRemaining, room) : 0;
     await ctx.db.transaction(async (tx) => {
       await addLedger(tx, {
         studentId: r.studentId,
@@ -149,4 +159,19 @@ export async function closeMonth(ctx: Ctx, month: Month): Promise<void> {
       }
     });
   }
+}
+
+/**
+ * その月の残り回数のうち、前の月から繰り越した分（その月の末で消える）。
+ * 予約は繰り越した回数から先に使ったものとみなす（PY-07）
+ */
+export async function carriedRemaining(db: Db, studentId: string, month: Month): Promise<number> {
+  const rows = await db
+    .select({ reason: creditLedger.reason, total: sql<number>`sum(${creditLedger.delta})::int` })
+    .from(creditLedger)
+    .where(and(eq(creditLedger.studentId, studentId), eq(creditLedger.month, month)))
+    .groupBy(creditLedger.reason);
+  const total = rows.reduce((a, r) => a + r.total, 0);
+  const own = rows.filter((r) => ['grant_monthly', 'grant_enrollment', 'adjust'].includes(r.reason)).reduce((a, r) => a + r.total, 0);
+  return Math.max(0, Math.min(total, total - Math.max(0, own)));
 }

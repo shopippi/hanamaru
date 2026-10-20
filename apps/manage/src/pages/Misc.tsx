@@ -257,6 +257,8 @@ type Settings = {
   reserveDeadlineHours: number;
   changeDeadlineHours: number;
   cancelDeadlineHours: number;
+  cancelDeadlineMode: 'hoursBefore' | 'previousDayAt';
+  cancelDeadlinePrevDayHour: number;
   approvalRequired: boolean;
   graceDays: number;
   carryoverEnabled: boolean;
@@ -323,7 +325,20 @@ export function SettingsPage() {
                 <div className="grid-2">
                   {numField('reserveDeadlineHours', '予約の締切（レッスンの何時間前まで）')}
                   {numField('changeDeadlineHours', '変更の締切（何時間前まで）')}
-                  {numField('cancelDeadlineHours', 'キャンセルの締切（何時間前まで）', 'これより後のキャンセルは回数が戻りません')}
+                </div>
+                <div className="grid-2">
+                  <Select
+                    label="キャンセルの締切の決め方"
+                    hint="これより後のキャンセルは回数が戻りません"
+                    value={s.cancelDeadlineMode}
+                    onChange={(e) => set('cancelDeadlineMode', e.target.value as Settings['cancelDeadlineMode'])}
+                  >
+                    <option value="previousDayAt">レッスンの前日の決まった時刻まで</option>
+                    <option value="hoursBefore">レッスンの何時間前まで</option>
+                  </Select>
+                  {s.cancelDeadlineMode === 'previousDayAt'
+                    ? numField('cancelDeadlinePrevDayHour', 'キャンセルの締切（前日の何時まで）', '0〜23。例: 20 なら前日の20時まで')
+                    : numField('cancelDeadlineHours', 'キャンセルの締切（何時間前まで）')}
                 </div>
                 {numField('publishWeeks', '生徒に予約を公開する期間（週）', '受付日と空き時間は「受付日」と講師の画面のカレンダーで決めます')}
                 <Checkbox label="予約を管理者の承認制にする（承認まで「仮予約」）" checked={s.approvalRequired} onChange={(e) => set('approvalRequired', e.target.checked)} />
@@ -404,7 +419,7 @@ export function SettingsPage() {
 function Catalog() {
   const toast = useToast();
   const { state, reload } = useLoad(() => Promise.all([api.get<LessonType[]>('/lesson-types'), api.get<{ id: string; name: string; active: boolean }[]>('/rooms')]), []);
-  const [lt, setLt] = useState({ name: '', kind: 'private', durationMinutes: '45', capacity: '1' });
+  const [lt, setLt] = useState({ name: '', kind: 'private', durationMinutes: '60', capacity: '1', online: false });
   const [room, setRoom] = useState('');
   const run = useAction(async (fn: () => Promise<unknown>, msg: string) => {
     try {
@@ -433,7 +448,7 @@ function Catalog() {
                       )}
                     </span>
                     <span className="list-meta">
-                      {t.kind === 'group' ? `グループ・定員${t.capacity}` : '個人'}・{t.durationMinutes}分
+                      {t.kind === 'group' ? `グループ・定員${t.capacity}` : '個人'}・{t.durationMinutes}分{t.online ? '・オンライン' : ''}
                     </span>
                   </span>
                   <Button variant="quiet" onClick={() => void run.run(() => api.patch(`/lesson-types/${t.id}`, { ...t, active: !t.active }), '保存しました')}>
@@ -444,17 +459,22 @@ function Catalog() {
             </ul>
             <div className="panel-body panel-divider stack">
             <h3>レッスン種別を追加</h3>
-            <TextField label="名前" hint="例: 個人 45分" value={lt.name} onChange={(e) => setLt({ ...lt, name: e.target.value })} />
+            <TextField label="名前" hint="例: ポピュラーピアノ（対面）60分" value={lt.name} onChange={(e) => setLt({ ...lt, name: e.target.value })} />
             <Select label="種類" value={lt.kind} onChange={(e) => setLt({ ...lt, kind: e.target.value })}>
               <option value="private">個人</option>
               <option value="group">グループ</option>
             </Select>
             <TextField label="時間（分）" inputMode="numeric" value={lt.durationMinutes} onChange={(e) => setLt({ ...lt, durationMinutes: e.target.value })} />
             {lt.kind === 'group' && <TextField label="定員" inputMode="numeric" value={lt.capacity} onChange={(e) => setLt({ ...lt, capacity: e.target.value })} />}
+            <Checkbox
+              label="オンラインのレッスン（教室の受付時間に関係なく、講師の空き時間で予約できる）"
+              checked={lt.online}
+              onChange={(e) => setLt({ ...lt, online: e.target.checked })}
+            />
             <Button
               variant="secondary"
               disabled={!lt.name}
-              onClick={() => void run.run(() => api.post('/lesson-types', { name: lt.name, kind: lt.kind, durationMinutes: Number(lt.durationMinutes), capacity: Number(lt.capacity) }), 'レッスン種別を追加しました')}
+              onClick={() => void run.run(() => api.post('/lesson-types', { name: lt.name, kind: lt.kind, durationMinutes: Number(lt.durationMinutes), capacity: Number(lt.capacity), online: lt.online }), 'レッスン種別を追加しました')}
               style={{ alignSelf: 'flex-start' }}
             >
               <IconPlus size={18} />

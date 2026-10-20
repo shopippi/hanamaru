@@ -19,7 +19,7 @@ export async function sendReminders(ctx: Ctx): Promise<number> {
   if (jstParts(now).hour < settings.reminderHour) return 0;
   const tomorrow = addDays(dateOf(now), 1);
   const due = await ctx.db
-    .select({ r: reservations, teacherName: teachers.name, lessonTypeName: lessonTypes.name })
+    .select({ r: reservations, teacherName: teachers.name, lessonTypeName: lessonTypes.name, online: lessonTypes.online })
     .from(reservations)
     .innerJoin(teachers, eq(teachers.id, reservations.teacherId))
     .innerJoin(lessonTypes, eq(lessonTypes.id, reservations.lessonTypeId))
@@ -32,7 +32,7 @@ export async function sendReminders(ctx: Ctx): Promise<number> {
       ),
     );
   let sent = 0;
-  for (const { r, teacherName } of due) {
+  for (const { r, teacherName, lessonTypeName, online } of due) {
     if (!r.studentId) continue;
     // 先に印を付けてから送る（送信が重なっても二重に送らない）
     const marked = await ctx.db
@@ -45,7 +45,7 @@ export async function sendReminders(ctx: Ctx): Promise<number> {
     await ctx.notifier.send(
       'reservation_reminder',
       await recipientOfStudent(ctx.db, s),
-      messages.reservationReminder({ studentName: s.name, teacherName, startsAt: r.startsAt }),
+      messages.reservationReminder({ studentName: s.name, teacherName, startsAt: r.startsAt, lessonTypeName, online }),
     );
     sent++;
   }

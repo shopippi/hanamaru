@@ -115,6 +115,7 @@ export function Reservations() {
                             </p>
                             <p className="list-meta">
                               {r.teacherName}・{r.lessonTypeName}
+                              {r.online && <span className="badge" style={{ marginLeft: 8 }}>オンライン</span>}
                             </p>
                           </div>
                           {r.status === 'pending' && <span className="badge badge-strong">仮予約</span>}

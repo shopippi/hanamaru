@@ -14,6 +14,7 @@ export const lessonTypeInput = z
     kind: z.enum(['private', 'group']),
     durationMinutes: z.number().int().min(15).max(240),
     capacity: z.number().int().min(1).max(50).default(1),
+    online: z.boolean().default(false),
     active: z.boolean().default(true),
   })
   .transform((t) => ({ ...t, capacity: t.kind === 'private' ? 1 : t.capacity }));

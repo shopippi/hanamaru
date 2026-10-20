@@ -943,7 +943,6 @@ code {
   height: 72px;
   border-radius: 50%;
   object-fit: cover;
-  filter: grayscale(1);
 }
 .profile-quote {
   margin: 0;

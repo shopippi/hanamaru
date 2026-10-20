@@ -37,7 +37,12 @@ describe('PY-03 / PY-04 入会時の同意', () => {
 
   test('PY-04 入会画面に出す契約の内容は、設定値（キャンセルの締切・猶予期間）から作る', async () => {
     const { f, student, actor } = await enrollingStudent();
-    expect((await enrollmentOptions(f.ctx, actor, student.id)).terms).toEqual({ cancelDeadlineHours: 24, graceDays: 7 });
+    expect((await enrollmentOptions(f.ctx, actor, student.id)).terms).toEqual({
+      cancelDeadlineHours: 24,
+      cancelDeadline: 'レッスンの前日20時まで',
+      graceDays: 7,
+      carryover: true,
+    });
   });
 });
 

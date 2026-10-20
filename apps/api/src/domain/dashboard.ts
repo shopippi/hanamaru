@@ -38,6 +38,7 @@ async function upcoming(ctx: Ctx) {
       studentName: students.name,
       trialName: trialRequests.name,
       lessonTypeName: lessonTypes.name,
+      online: lessonTypes.online,
     })
     .from(reservations)
     .innerJoin(teachers, eq(teachers.id, reservations.teacherId))
