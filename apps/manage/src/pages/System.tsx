@@ -156,7 +156,16 @@ export function SystemPage() {
               </dl>
             </Panel>
 
-            <Panel title="届けられなかった通知" actions={<StateBadge state={s.notifications.state} />} flush={s.notifications.failed.length > 0}>
+            <Panel
+              title="届けられなかった通知"
+              actions={
+                // 自動で送り直す途中のものがあるだけなら「再送待ち」と出す（正常とは書かない）
+                s.notifications.state === 'ok' && s.notifications.failed.length > 0 ? (
+                  <span className="badge">再送待ち</span>
+                ) : (
+                  <StateBadge state={s.notifications.state} />
+                )
+              } flush={s.notifications.failed.length > 0}>
               {s.notifications.failed.length === 0 ? (
                 <Empty icon={<IconInbox />} message="届けられなかった通知はありません" />
               ) : (

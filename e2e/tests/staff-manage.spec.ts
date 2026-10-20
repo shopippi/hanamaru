@@ -41,7 +41,11 @@ test('3.8 設定を変えて保存できる', async ({ page }) => {
   await box.setChecked(!was);
   await page.getByRole('button', { name: '設定を保存する' }).click();
   await expect(page.getByText('設定を保存しました')).toBeVisible();
+  // 保存のあとの読み直しが終わってから戻す（読み直しの途中に操作すると、変更なしとみなされる）
+  await expect(page.getByText('変更はありません')).toBeVisible();
+  await expect(box).toBeChecked({ checked: !was });
   await box.setChecked(was);
+  await expect(page.getByText('保存していない変更があります')).toBeVisible();
   await page.getByRole('button', { name: '設定を保存する' }).click();
   await expect(page.getByText('設定を保存しました').first()).toBeVisible();
 });
