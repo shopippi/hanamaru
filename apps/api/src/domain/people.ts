@@ -129,6 +129,8 @@ class CsvRejected extends Error {
 }
 
 const CSV_COLUMNS = ['ログインメール', '保護者名', '生徒名', '電話番号', '生徒のメール', '住所'] as const;
+/** 続けて置いてもよい列（ST-01）。コースと担当講師は名前で書く。担当講師が複数なら「、」で区切る */
+const CSV_OPTIONAL = ['月額コース', '担当講師'] as const;
 
 /**
  * CSVで一括登録する（ST-01）。1行でも誤りがあれば何も登録せず、行番号と理由を返す。
@@ -143,12 +145,43 @@ export async function importStudentsCsv(ctx: Ctx, actor: Actor, csv: string) {
   }
   const errors: { line: number; message: string }[] = [];
   const inputs: { line: number; input: ParsedStudent }[] = [];
+  // 7列目からの任意の列（見出しで判断する）
+  const extra = header.slice(CSV_COLUMNS.length).map((h) => h.trim());
+  for (const h of extra) {
+    if (h && !(CSV_OPTIONAL as readonly string[]).includes(h)) {
+      throw invalid(`7列目からの見出しは「${CSV_OPTIONAL.join('」「')}」だけにしてください（「${h}」は使えません）`);
+    }
+  }
+  const col = (name: (typeof CSV_OPTIONAL)[number]) => {
+    const i = extra.indexOf(name);
+    return i < 0 ? -1 : CSV_COLUMNS.length + i;
+  };
+  const [courseRows, teacherRows] = await Promise.all([
+    col('月額コース') >= 0 ? ctx.db.select({ id: courses.id, name: courses.name }).from(courses).where(eq(courses.active, true)) : [],
+    col('担当講師') >= 0 ? ctx.db.select({ id: teachers.id, name: teachers.name }).from(teachers).where(eq(teachers.active, true)) : [],
+  ]);
+  const norm = (s: string) => s.replace(/[\s　]+/g, '');
   rows.forEach((cols, i) => {
     if (cols.every((c) => !c.trim())) return;
+    const line = i + 2;
     const [accountEmail, guardianName, name, phone, studentEmail, address] = cols;
-    const r = studentInput.safeParse({ accountEmail, guardianName, name, phone, email: studentEmail ?? '', address });
-    if (!r.success) errors.push({ line: i + 2, message: r.error.issues[0]?.message ?? '入力に誤りがあります' });
-    else inputs.push({ line: i + 2, input: r.data });
+    let courseId: string | undefined;
+    const courseName = col('月額コース') >= 0 ? (cols[col('月額コース')] ?? '').trim() : '';
+    if (courseName) {
+      const c = courseRows.find((x) => norm(x.name) === norm(courseName));
+      if (!c) return void errors.push({ line, message: `月額コース「${courseName}」が見つかりません` });
+      courseId = c.id;
+    }
+    const teacherIds: string[] = [];
+    const teacherNames = col('担当講師') >= 0 ? (cols[col('担当講師')] ?? '').split(/[、,，・]/).map((x) => x.trim()).filter(Boolean) : [];
+    for (const tn of teacherNames) {
+      const t = teacherRows.find((x) => norm(x.name) === norm(tn));
+      if (!t) return void errors.push({ line, message: `担当講師「${tn}」が見つかりません` });
+      teacherIds.push(t.id);
+    }
+    const r = studentInput.safeParse({ accountEmail, guardianName, name, phone, email: studentEmail ?? '', address, courseId, teacherIds });
+    if (!r.success) errors.push({ line, message: r.error.issues[0]?.message ?? '入力に誤りがあります' });
+    else inputs.push({ line, input: r.data });
   });
   if (errors.length) return { created: 0, errors };
   // 全行を1つのトランザクションで登録し、1行でも登録できなければ何も残さない。招待メールは確定してから送る
@@ -509,7 +542,6 @@ export async function lessonOfTeacher(ctx: Ctx, actor: Actor, reservationId: str
 export const teacherInput = z.object({
   email,
   name: z.string().trim().min(1, '名前を入力してください').max(100),
-  profileSlug: z.string().regex(/^[a-z0-9-]+$/, 'プロフィールのキーは英小文字・数字・ハイフンで入力してください'),
 });
 
 export async function createTeacher(ctx: Ctx, actor: Actor, raw: unknown) {
@@ -521,7 +553,7 @@ export async function createTeacher(ctx: Ctx, actor: Actor, raw: unknown) {
     const [account] = await tx.insert(accounts).values({ email: input.email, role: 'teacher', displayName: input.name }).returning();
     const [teacher] = await tx
       .insert(teachers)
-      .values({ accountId: account!.id, name: input.name, profileSlug: input.profileSlug })
+      .values({ accountId: account!.id, name: input.name })
       .returning();
     await audit(tx, actor, 'teacher.create', 'teacher', teacher!.id, input);
     return { account: account!, teacher: teacher! };
@@ -543,7 +575,7 @@ export async function setTeacherActive(ctx: Ctx, actor: Actor, teacherId: string
 export async function listTeachers(ctx: Ctx, actor: Actor) {
   assertAdmin(actor);
   return ctx.db
-    .select({ id: teachers.id, name: teachers.name, profileSlug: teachers.profileSlug, active: teachers.active, email: accounts.email })
+    .select({ id: teachers.id, name: teachers.name, instruments: teachers.instruments, active: teachers.active, email: accounts.email })
     .from(teachers)
     .innerJoin(accounts, eq(accounts.id, teachers.accountId))
     .orderBy(asc(teachers.name));

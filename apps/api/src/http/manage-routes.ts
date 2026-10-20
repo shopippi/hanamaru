@@ -62,7 +62,8 @@ import {
 import { getSettings, settingsPatchSchema, updateSettings } from '../domain/settings.js';
 import { audit } from '../domain/audit.js';
 import { jst, monthOf } from '../lib/time.js';
-import { body, rawBody, dateParam, isoDateTime, monthParam, query, requireAuth, type AppDeps, type Env } from './app.js';
+import { body, rawBody, dateParam, isoDateTime, monthParam, photoResponse, query, requireAuth, type AppDeps, type Env } from './app.js';
+import { deletePhotoAsAdmin, photoForAdmin, profileForAdmin, setPhotoAsAdmin, updateProfileAsAdmin } from '../domain/teacher-profiles.js';
 import { authRoutes } from './auth-routes.js';
 
 // 管理者の画面の API（manage.hanamarumusic.com/api。手前に Cloudflare Access: URL-02）
@@ -126,6 +127,15 @@ export function manageRoutes(deps: AppDeps) {
   priv.post('/teachers/:id/active', async (c) => {
     const input = await body(c, z.object({ active: z.boolean() }));
     await setTeacherActive(ctx, c.get('actor'), c.req.param('id'), input.active);
+    return c.json({ ok: true });
+  });
+  // 講師のプロフィールと写真（TC-06）
+  priv.get('/teachers/:id/profile', async (c) => c.json(await profileForAdmin(ctx, c.get('actor'), c.req.param('id'))));
+  priv.put('/teachers/:id/profile', async (c) => c.json(await updateProfileAsAdmin(ctx, c.get('actor'), c.req.param('id'), await rawBody(c))));
+  priv.get('/teachers/:id/photo', async (c) => photoResponse(c, await photoForAdmin(ctx, c.get('actor'), c.req.param('id'))));
+  priv.put('/teachers/:id/photo', async (c) => c.json(await setPhotoAsAdmin(ctx, c.get('actor'), c.req.param('id'), await rawBody(c))));
+  priv.delete('/teachers/:id/photo', async (c) => {
+    await deletePhotoAsAdmin(ctx, c.get('actor'), c.req.param('id'));
     return c.json({ ok: true });
   });
   priv.get('/teachers/:id/availability', async (c) => c.json(await availabilityOf(ctx.db, c.req.param('id'))));

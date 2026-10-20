@@ -12,10 +12,11 @@ import { billingPortal, enrollmentOptions, startCardRegistration, startEnrollmen
 import { listLessonTypes } from '../domain/catalog.js';
 import { DomainError } from '../domain/errors.js';
 import { myStudents, studentHome } from '../domain/home.js';
-import { register, registrationOptions, teacherProfilesForStudent } from '../domain/registration.js';
+import { register, registrationOptions } from '../domain/registration.js';
+import { photoForStudent, teacherProfilesForStudent } from '../domain/teacher-profiles.js';
 import { createReview, deleteReview, myReviewsPage, updateReview } from '../domain/reviews.js';
 import { bookPublicTrial, publicTrialSlots, submitTrialRequest } from '../domain/trial.js';
-import { body, rawBody, dateParam, isoDateTime, query, requireAuth, type AppDeps, type Env } from './app.js';
+import { body, rawBody, dateParam, isoDateTime, photoResponse, query, requireAuth, type AppDeps, type Env } from './app.js';
 import { authRoutes } from './auth-routes.js';
 
 // 生徒の画面の API（student.hanamarumusic.com/api）
@@ -75,6 +76,10 @@ export function studentRoutes(deps: AppDeps) {
   app.get('/students/:sid/home', async (c) => c.json(await studentHome(ctx, c.get('actor'), c.req.param('sid'))));
   app.get('/students/:sid/teachers', async (c) =>
     c.json(await teacherProfilesForStudent(ctx, c.get('actor'), c.req.param('sid'))),
+  );
+  // 担当講師の写真（TC-05、TC-06）
+  app.get('/students/:sid/teachers/:tid/photo', async (c) =>
+    photoResponse(c, await photoForStudent(ctx, c.get('actor'), c.req.param('sid'), c.req.param('tid'))),
   );
   app.get('/students/:sid/slots', async (c) => {
     const q = query(c, z.object({ teacherId: z.string().uuid(), from: dateParam, to: dateParam }));

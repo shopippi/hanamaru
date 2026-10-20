@@ -14,7 +14,8 @@ import {
 import { markAllReviewsChecked, markReviewChecked, reviewsForTeacher } from '../domain/reviews.js';
 import { availabilityChange, availabilityOf, changeAvailability, setTeacherDay, teacherCalendar } from '../domain/schedule.js';
 import { jst } from '../lib/time.js';
-import { body, dateParam, monthParam, query, rawBody, requireAuth, type AppDeps, type Env } from './app.js';
+import { body, dateParam, monthParam, photoResponse, query, rawBody, requireAuth, type AppDeps, type Env } from './app.js';
+import { deleteMyPhoto, myPhoto, myProfile, setMyPhoto, updateMyProfile } from '../domain/teacher-profiles.js';
 import { authRoutes } from './auth-routes.js';
 
 // 講師の画面の API（staff.hanamarumusic.com/api）
@@ -25,7 +26,7 @@ export function staffRoutes(deps: AppDeps) {
 
   app.route('/auth', authRoutes(deps, 'staff'));
   const auth = requireAuth(deps, 'staff');
-  for (const p of ['/lessons', '/lessons/*', '/students', '/students/*', '/availability', '/availability/*', '/lesson-types', '/rooms', '/reviews', '/reviews/*']) {
+  for (const p of ['/lessons', '/lessons/*', '/students', '/students/*', '/availability', '/availability/*', '/lesson-types', '/rooms', '/reviews', '/reviews/*', '/profile', '/profile/*']) {
     app.use(p, auth);
   }
 
@@ -34,6 +35,16 @@ export function staffRoutes(deps: AppDeps) {
     if (!t) throw forbidden();
     return t;
   };
+
+  // 自分のプロフィールと写真（TC-07）
+  app.get('/profile', async (c) => c.json(await myProfile(ctx, c.get('actor'))));
+  app.put('/profile', async (c) => c.json(await updateMyProfile(ctx, c.get('actor'), await rawBody(c))));
+  app.get('/profile/photo', async (c) => photoResponse(c, await myPhoto(ctx, c.get('actor'))));
+  app.put('/profile/photo', async (c) => c.json(await setMyPhoto(ctx, c.get('actor'), await rawBody(c))));
+  app.delete('/profile/photo', async (c) => {
+    await deleteMyPhoto(ctx, c.get('actor'));
+    return c.json({ ok: true });
+  });
 
   // 担当レッスン一覧（4.1）
   app.get('/lessons', async (c) => {
