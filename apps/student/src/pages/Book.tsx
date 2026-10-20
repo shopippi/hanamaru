@@ -4,6 +4,7 @@ import {
   ConfirmDialog,
   Empty,
   IconCalendar,
+  Segmented,
   Loadable,
   Skeleton,
   Warning,
@@ -77,14 +78,24 @@ export function Book() {
   const [day, setDay] = useState<string | null>(null);
   const [picked, setPicked] = useState<Slot | null>(null);
 
+  // 対面とオンライン（RS-09）。両方の枠がある講師では、先に受け方を選ぶ
+  const onlineTypes = useMemo(() => new Set((base.data?.[1] ?? []).filter((t) => t.online).map((t) => t.id)), [base.data]);
+  const allSlots = slotsLoad.data ?? [];
+  const hasOnline = allSlots.some((s) => onlineTypes.has(s.lessonTypeId));
+  const hasInPerson = allSlots.some((s) => !onlineTypes.has(s.lessonTypeId));
+  const [modeChoice, setMode] = useState<'inPerson' | 'online'>('inPerson');
+  const mode = hasOnline && !hasInPerson ? 'online' : !hasOnline ? 'inPerson' : modeChoice;
+
   const byDay = useMemo(() => {
     const m = new Map<string, Slot[]>();
-    for (const s of slotsLoad.data ?? []) {
+    for (const s of allSlots) {
+      if ((mode === 'online') !== onlineTypes.has(s.lessonTypeId)) continue;
       const k = dateKey(s.startsAt);
       m.set(k, [...(m.get(k) ?? []), s]);
     }
     return m;
-  }, [slotsLoad.data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slotsLoad.data, mode, onlineTypes]);
   const days = [...byDay.keys()];
   const activeDay = day && byDay.has(day) ? day : (days[0] ?? null);
 
@@ -144,6 +155,23 @@ export function Book() {
                     />
                   ) : (
                     <div className="stack-lg">
+                      {hasOnline && hasInPerson && (
+                        <div>
+                          <p className="field-label" id="mode-label">
+                            受け方
+                          </p>
+                          <Segmented
+                            label="受け方"
+                            value={mode}
+                            options={[['inPerson', '対面（教室）'], ['online', 'オンライン']] as const}
+                            onChange={(v) => {
+                              setMode(v);
+                              setDay(null);
+                            }}
+                          />
+                          {mode === 'online' && <p className="small secondary" style={{ marginTop: 6 }}>参加用のURLは、講師からご連絡します。</p>}
+                        </div>
+                      )}
                       <div>
                         <p className="field-label" id="day-label">
                           日にち
@@ -216,7 +244,10 @@ export function Book() {
                     </div>
                     <div>
                       <dt>レッスン</dt>
-                      <dd>{typeName(picked.lessonTypeId)}</dd>
+                      <dd>
+                        {typeName(picked.lessonTypeId)}
+                        {onlineTypes.has(picked.lessonTypeId) && <span className="badge" style={{ marginLeft: 8 }}>オンライン</span>}
+                      </dd>
                     </div>
                   </dl>
                 )}

@@ -98,6 +98,7 @@ export function Lessons() {
                             <span className="list-title">{l.studentId ? <Link to={`/students/${l.studentId}`}>{l.studentName}</Link> : '体験レッスン'}</span>
                             <span className="list-meta">
                               {l.lessonTypeName}
+                              {l.online && <span className="badge" style={{ marginLeft: 8 }}>オンライン</span>}
                               {l.status === 'pending' && <span className="badge badge-strong" style={{ marginLeft: 8 }}>仮予約</span>}
                             </span>
                           </span>

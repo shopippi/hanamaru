@@ -68,6 +68,7 @@ export function Trial() {
             <IconCheckCircle />
           </span>
           <p>{done === 'booked' ? '確認のメールをお送りしました。当日お待ちしています。' : '日時を調整のうえ、教室からメールでご連絡します。'}</p>
+          <p className="small secondary">体験レッスンの料金は、当日教室でお支払いください。</p>
         </div>
       </AuthFrame>
     );
@@ -75,7 +76,7 @@ export function Trial() {
 
   const available = slots.data ?? null;
   return (
-    <AuthFrame title="体験レッスンのお申込" description="お申込は無料です。内容を確認のうえ、教室からご連絡します。" links={<a href="/login">生徒の方はこちら（ログイン）</a>}>
+    <AuthFrame title="体験レッスンのお申込" description="内容を確認のうえ、教室からご連絡します。体験レッスンの料金は、当日教室でお支払いください。" links={<a href="/login">生徒の方はこちら（ログイン）</a>}>
       <form className="stack-lg" onSubmit={submit} noValidate>
         {error && <Warning title={error} />}
         <div className="stack">

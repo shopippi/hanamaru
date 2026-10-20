@@ -98,8 +98,8 @@ test('ST-01 / AU-03 / PY-01〜05 / SR-02 / OP-04 / MB-03 / UI-12 管理者が登
   await admin.getByLabel('生徒の名前').fill(NAME);
   await admin.getByLabel('ログインメール（保護者または本人）').fill(EMAIL);
   await admin.getByLabel('電話番号').fill('090-1111-2222');
-  await admin.getByLabel('月額コース').selectOption({ label: '月4回コース' });
-  await admin.getByLabel('見本 花子').check();
+  await admin.getByLabel('月額コース').selectOption({ label: '1h×月4回コース' });
+  await admin.getByLabel('松田 悠義').check();
   await admin.getByRole('button', { name: '登録して招待メールを送る' }).click();
   await expect(admin.getByRole('heading', { name: NAME })).toBeVisible();
 
@@ -267,10 +267,10 @@ test('RS-07 管理者が毎週の繰り返し予約を作ると、各回が生�
   await adminNav(a, '予約');
   await a.getByRole('button', { name: '繰り返し予約' }).click();
   await a.getByLabel('生徒', { exact: true }).selectOption({ label: NAME });
-  await a.getByLabel('担当講師').selectOption({ label: '見本 花子' });
-  await a.getByLabel('レッスン種別').selectOption({ label: '個人 45分' });
+  await a.getByLabel('担当講師').selectOption({ label: '松田 悠義' });
+  await a.getByLabel('レッスン種別').selectOption({ label: 'ポピュラーピアノ（対面）60分' });
   await a.getByLabel('曜日').selectOption({ label: '月曜日' });
-  await a.getByLabel('開始時刻').fill('18:45');
+  await a.getByLabel('開始時刻').fill('18:00');
   await a.getByRole('button', { name: '繰り返し予約を作る' }).click();
   await expect(a.getByText(/回分を予約しました/)).toBeVisible();
   // 回数が足りない月は警告が出る
@@ -279,7 +279,7 @@ test('RS-07 管理者が毎週の繰り返し予約を作ると、各回が生�
 
   const s = await studentPage(browser);
   await s.getByRole('link', { name: '予約一覧' }).click();
-  await expect(s.getByText(/18:45〜19:30/).first()).toBeVisible();
+  await expect(s.getByText(/18:00〜19:00/).first()).toBeVisible();
   await s.context().close();
 });
 
@@ -385,7 +385,7 @@ test('TR-01 体験の申込に、管理者が枠を押さえて連絡する', as
   await adminNav(a, '体験');
   const item = a.locator('li', { hasText: '体験 申込' });
   await item.getByRole('button', { name: '枠を押さえる' }).click();
-  await item.getByLabel('講師').selectOption({ label: '見本 花子' });
+  await item.getByLabel('講師').selectOption({ label: '松田 悠義' });
   await item.getByLabel('日付').fill(date);
   await item.locator('.slot-grid button').first().click();
   await expect(a.getByText('予約しました。申込者に確定のメールを送りました')).toBeVisible();
@@ -449,9 +449,9 @@ test('DB-02 ダッシュボードの予約は講師別・教室別に切り替�
   await a.getByRole('button', { name: '教室別' }).click();
   // 教室別では部屋の名前（指定がなければ「教室の指定なし」）でまとめる
   await expect(a.getByRole('heading', { name: /^(レッスン室1|教室の指定なし)\s*\d+件$/ }).first()).toBeVisible();
-  await expect(a.getByRole('heading', { name: /^見本 花子\s*\d+件$/ })).toHaveCount(0);
+  await expect(a.getByRole('heading', { name: /^松田 悠義\s*\d+件$/ })).toHaveCount(0);
   await a.getByRole('button', { name: '講師別' }).click();
-  await expect(a.getByRole('heading', { name: /^見本 花子\s*\d+件$/ })).toBeVisible();
+  await expect(a.getByRole('heading', { name: /^松田 悠義\s*\d+件$/ })).toBeVisible();
   await a.context().close();
 });
 

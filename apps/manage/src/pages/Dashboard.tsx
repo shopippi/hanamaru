@@ -56,6 +56,8 @@ interface Res {
   roomName: string | null;
   studentName: string;
   lessonTypeName: string;
+  /** オンラインのレッスン（RS-09） */
+  online?: boolean;
 }
 
 const shiftMonth = (m: string, n: number) => {
@@ -176,6 +178,7 @@ export function Dashboard() {
                                 <span className="list-title">{r.studentName}</span>
                                 <span className="list-meta">
                                   {r.lessonTypeName}
+                                  {r.online && '・オンライン'}
                                   {groupBy === 'room' ? `・${r.teacherName}` : ''}
                                 </span>
                               </span>
