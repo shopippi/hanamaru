@@ -4,6 +4,7 @@ import { teacherOfActor } from '../domain/access.js';
 import { listLessonTypes, listRooms } from '../domain/catalog.js';
 import { forbidden } from '../domain/errors.js';
 import {
+  lessonOfTeacher,
   lessonsOfTeacher,
   saveLessonRecord,
   setNote,
@@ -38,6 +39,7 @@ export function staffRoutes(deps: AppDeps) {
     const q = query(c, z.object({ from: dateParam, to: dateParam }));
     return c.json(await lessonsOfTeacher(ctx, c.get('actor'), jst(q.from), new Date(jst(q.to).getTime() + 86_400_000)));
   });
+  app.get('/lessons/:id', async (c) => c.json(await lessonOfTeacher(ctx, c.get('actor'), c.req.param('id'))));
   // レッスン記録（SR-04）
   app.put('/lessons/:id/record', async (c) => {
     const input = await body(c, z.object({ content: z.string(), progress: z.string().default('') }));

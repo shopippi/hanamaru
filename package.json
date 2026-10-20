@@ -2,10 +2,14 @@
   "name": "hanamaru",
   "private": true,
   "packageManager": "pnpm@10.18.3",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "build": "pnpm -r build"
+    "build": "pnpm -r build",
+    "e2e": "pnpm --filter @hanamaru/e2e e2e",
+    "dev": "pnpm --parallel --filter @hanamaru/api --filter @hanamaru/student --filter @hanamaru/staff --filter @hanamaru/manage run dev:all"
   }
 }
