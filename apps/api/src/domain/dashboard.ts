@@ -6,6 +6,7 @@ import { creditShortages } from './booking.js';
 import type { Actor, Ctx } from './context.js';
 import { teacherMonthStats } from './schedule.js';
 import { getSettings } from './settings.js';
+import { systemAttentionCount } from './system.js';
 
 // 管理者のダッシュボード（3.10）。管理画面を開いたときに最初に出す
 
@@ -105,6 +106,8 @@ export async function dashboard(ctx: Ctx, actor: Actor, opts: { month?: Month } 
       pendingReservations: pendingReservations[0]?.n ?? 0,
       newTrialRequests: newTrials[0]?.n ?? 0,
       creditShortages: shortages,
+      // システムに要確認があること（OP-08）。中身は「システムの状態」の画面で見る
+      systemAttention: await systemAttentionCount(ctx, actor),
     },
   };
 }

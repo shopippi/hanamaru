@@ -186,6 +186,8 @@ const db = await openDb();
 let clockOffsetMs = 0;
 const mails: { to: string; subject: string; text: string; at: string }[] = [];
 const console_ = new ConsoleEmailTransport();
+/** 開発用: true にするとメールの送信に失敗する（システムの状態の画面と送り直しを試すため） */
+let mailFailing = false;
 
 const gateway = new DevGateway();
 const ctx: Ctx = {
@@ -194,11 +196,12 @@ const ctx: Ctx = {
   notifier: new NotificationService(db, [
     new EmailChannel({
       send: async (m) => {
+        if (mailFailing) throw new Error('メールを送れませんでした（開発用の失敗）');
         mails.push({ ...m, at: new Date(Date.now() + clockOffsetMs).toISOString() });
         await console_.send(m);
       },
     }),
-  ]),
+  ], () => new Date(Date.now() + clockOffsetMs)),
   payments: gateway,
   urls: { student: `http://${HOST}:5173`, staff: `http://${HOST}:5174`, manage: `http://${HOST}:5175` },
 };
@@ -248,6 +251,11 @@ dev.get('/portal', (c) =>
 dev.get('/totp', async (c) => {
   await db.update(schema.accounts).set({ totpLastStep: null }).where(eq(schema.accounts.email, 'admin@example.test'));
   return c.text(totpCode(ADMIN_TOTP_SECRET, ctx.now()));
+});
+dev.post('/mail-failure', async (c) => {
+  const { failing } = (await c.req.json()) as { failing: boolean };
+  mailFailing = !!failing;
+  return c.json({ failing: mailFailing });
 });
 dev.post('/jobs', async (c) => c.json(await runJobs(ctx)));
 // 時計を進める（月末・月初の処理の確認用）。{ "at": "2026-11-01T00:10:00+09:00" }。null で元に戻す

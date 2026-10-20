@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { readFileSync, existsSync } from 'node:fs';
 import { z } from 'zod';
 import type { Db } from '../db/client.js';
@@ -48,24 +48,42 @@ export interface ProfileView {
   message: string;
   /** 写真の URL（各画面の /api から見た場所）。写真がなければ null */
   photo: string | null;
+  /** 写真の大きさ（バイト）。写真がなければ null。編集する画面（管理者・講師本人）にだけ返す */
+  photoSize?: number | null;
+  /** おすすめの大きさ（設定値）を超えている。編集画面に「画質を下げる」を出す */
+  photoLarge?: boolean;
 }
 
 type Teacher = typeof teachers.$inferSelect;
 
-async function photoVersions(db: Db, ids: string[]): Promise<Map<string, Date>> {
+interface PhotoMeta {
+  updatedAt: Date;
+  size: number;
+}
+
+async function photoVersions(db: Db, ids: string[]): Promise<Map<string, PhotoMeta>> {
   if (ids.length === 0) return new Map();
   const rows = await db
-    .select({ teacherId: teacherPhotos.teacherId, updatedAt: teacherPhotos.updatedAt })
+    .select({ teacherId: teacherPhotos.teacherId, updatedAt: teacherPhotos.updatedAt, size: sql<number>`octet_length(${teacherPhotos.data})` })
     .from(teacherPhotos)
     .where(inArray(teacherPhotos.teacherId, ids));
-  return new Map(rows.map((r) => [r.teacherId, r.updatedAt]));
+  return new Map(rows.map((r) => [r.teacherId, { updatedAt: r.updatedAt, size: Number(r.size) }]));
 }
 
 /** 写真の URL。更新日時を付けて、写真を差し替えたら画面のキャッシュも新しくなるようにする */
-const withVersion = (path: string, updatedAt: Date | undefined) => (updatedAt ? `${path}?v=${updatedAt.getTime()}` : null);
+const withVersion = (path: string, meta: PhotoMeta | undefined) => (meta ? `${path}?v=${meta.updatedAt.getTime()}` : null);
 
-function view(t: Teacher, photo: string | null): ProfileView {
-  return { teacherId: t.id, name: t.name, instruments: t.instruments, career: t.career, message: t.message, photo };
+function view(t: Teacher, path: string, meta: PhotoMeta | undefined, recommendedKB: number): ProfileView {
+  return {
+    teacherId: t.id,
+    name: t.name,
+    instruments: t.instruments,
+    career: t.career,
+    message: t.message,
+    photo: withVersion(path, meta),
+    photoSize: meta?.size ?? null,
+    photoLarge: !!meta && meta.size > recommendedKB * 1024,
+  };
 }
 
 /** 生徒が見られるのは担当講師のプロフィールだけ（TC-05） */
@@ -75,11 +93,16 @@ export async function teacherProfilesForStudent(ctx: Ctx, actor: Actor, studentI
   if (ids.length === 0) return [];
   const rows = (await ctx.db.select().from(teachers).where(inArray(teachers.id, ids))).filter((t) => t.active);
   const versions = await photoVersions(ctx.db, rows.map((t) => t.id));
+  const { teacherPhotoRecommendedKB } = await getSettings(ctx.db);
   // 担当にした順に並べる
   return ids
     .map((id) => rows.find((t) => t.id === id))
     .filter((t): t is Teacher => !!t)
-    .map((t) => view(t, withVersion(`/api/students/${s.id}/teachers/${t.id}/photo`, versions.get(t.id))));
+    .map((t) => {
+      // 生徒の画面には写真の大きさは要らない
+      const { photoSize: _size, photoLarge: _large, ...v } = view(t, `/api/students/${s.id}/teachers/${t.id}/photo`, versions.get(t.id), teacherPhotoRecommendedKB);
+      return v;
+    });
 }
 
 async function loadTeacher(db: Db, teacherId: string): Promise<Teacher> {
@@ -100,7 +123,8 @@ export async function profileForAdmin(ctx: Ctx, actor: Actor, teacherId: string)
   assertAdmin(actor);
   const t = await loadTeacher(ctx.db, teacherId);
   const v = await photoVersions(ctx.db, [t.id]);
-  return view(t, withVersion(`/api/teachers/${t.id}/photo`, v.get(t.id)));
+  const { teacherPhotoRecommendedKB } = await getSettings(ctx.db);
+  return view(t, `/api/teachers/${t.id}/photo`, v.get(t.id), teacherPhotoRecommendedKB);
 }
 
 export async function updateProfileAsAdmin(ctx: Ctx, actor: Actor, teacherId: string, raw: unknown): Promise<ProfileView> {
@@ -131,7 +155,8 @@ export async function deletePhotoAsAdmin(ctx: Ctx, actor: Actor, teacherId: stri
 export async function myProfile(ctx: Ctx, actor: Actor): Promise<ProfileView> {
   const t = await myTeacher(ctx, actor);
   const v = await photoVersions(ctx.db, [t.id]);
-  return view(t, withVersion('/api/profile/photo', v.get(t.id)));
+  const { teacherPhotoRecommendedKB } = await getSettings(ctx.db);
+  return view(t, '/api/profile/photo', v.get(t.id), teacherPhotoRecommendedKB);
 }
 
 export async function updateMyProfile(ctx: Ctx, actor: Actor, raw: unknown): Promise<ProfileView> {
@@ -155,8 +180,11 @@ export async function deleteMyPhoto(ctx: Ctx, actor: Actor): Promise<void> {
 async function savePhoto(ctx: Ctx, teacherId: string, raw: unknown): Promise<void> {
   const input = parse(photoInput, raw);
   const data = Buffer.from(input.dataBase64, 'base64');
-  const { teacherPhotoMaxKB } = await getSettings(ctx.db);
-  if (data.length > teacherPhotoMaxKB * 1024) throw invalid(`写真は${teacherPhotoMaxKB}KBまでにしてください`);
+  // おすすめの大きさを超えていても受け付ける（あとで画面から画質を下げられる）。上限はサーバーを守るためだけ
+  const { teacherPhotoHardMaxMB } = await getSettings(ctx.db);
+  if (data.length > teacherPhotoHardMaxMB * 1024 * 1024) {
+    throw invalid(`写真が大きすぎます（${teacherPhotoHardMaxMB}MBまで）。別の写真を選ぶか、スマホで小さくしてから選んでください`);
+  }
   if (!looksLike(input.contentType, data)) throw invalid('写真のファイルを読めませんでした。別の写真を選んでください');
   const now = ctx.now();
   await ctx.db
