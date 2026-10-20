@@ -1,4 +1,5 @@
 import { handlePaymentEvent } from '../domain/billing.js';
+import { trackedRun } from '../domain/system.js';
 import { createBaseApp, type AppDeps } from './app.js';
 import { manageRoutes } from './manage-routes.js';
 import { staffRoutes } from './staff-routes.js';
@@ -11,7 +12,7 @@ import { studentRoutes } from './student-routes.js';
  *   manage.hanamarumusic.com/api/*  → /api/manage/*
  */
 export function createApp(deps: AppDeps) {
-  const app = createBaseApp();
+  const app = createBaseApp(deps.ctx.db);
   app.route('/api/student', studentRoutes(deps));
   app.route('/api/staff', staffRoutes(deps));
   app.route('/api/manage', manageRoutes(deps));
@@ -26,7 +27,8 @@ export function createApp(deps: AppDeps) {
       return c.json({ error: 'invalid signature' }, 400);
     }
     if (!event) return c.json({ received: true, handled: false });
-    const result = await handlePaymentEvent(deps.ctx, event);
+    // 受け取った時刻と成否を記録し、失敗が続いたら管理者に知らせる（OP-05）。署名の誤りは数えない
+    const result = await trackedRun(deps.ctx, 'stripeWebhook', () => handlePaymentEvent(deps.ctx, event));
     return c.json({ received: true, result });
   });
   return app;

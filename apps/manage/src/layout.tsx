@@ -10,6 +10,7 @@ import {
   IconHistory,
   IconLogout,
   IconMenu,
+  IconPulse,
   IconReceipt,
   IconSettings,
   IconSparkle,
@@ -54,6 +55,7 @@ const NAV: { title: string; items: Item[] }[] = [
       { to: '/closures', label: '休講', icon: IconBan },
       { to: '/settings', label: '設定', icon: IconSettings },
       { to: '/audit', label: '操作記録', icon: IconHistory },
+      { to: '/system', label: 'システムの状態', icon: IconPulse },
     ],
   },
 ];

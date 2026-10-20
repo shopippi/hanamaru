@@ -30,6 +30,7 @@ import {
 } from '../domain/billing.js';
 import { listLessonTypes, listRooms, saveLessonType, saveRoom } from '../domain/catalog.js';
 import { dashboard } from '../domain/dashboard.js';
+import { dismissNotification, resendNotification, systemStatus } from '../domain/system.js';
 import { bookTrialAsAdmin, listTrialRequests, setTrialStatus } from '../domain/trial.js';
 import { adjustCredits } from '../domain/credits.js';
 import {
@@ -315,6 +316,17 @@ export function manageRoutes(deps: AppDeps) {
   priv.get('/dashboard', async (c) => {
     const q = query(c, z.object({ month: monthParam.optional() }));
     return c.json(await dashboard(ctx, c.get('actor'), q));
+  });
+
+  // --- システムの状態（OP-05〜OP-08） ---
+  priv.get('/system', async (c) => c.json(await systemStatus(ctx, c.get('actor'))));
+  priv.post('/system/notifications/:id/resend', async (c) => {
+    await resendNotification(ctx, c.get('actor'), c.req.param('id'));
+    return c.json({ ok: true });
+  });
+  priv.post('/system/notifications/:id/dismiss', async (c) => {
+    await dismissNotification(ctx, c.get('actor'), c.req.param('id'));
+    return c.json({ ok: true });
   });
 
   // --- 体験レッスン（TR-01） ---

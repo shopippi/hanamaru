@@ -5,8 +5,16 @@
 
 name: ${COMPOSE_PROJECT_NAME:-hanamaru}
 
+# ログは1つのサービスにつき 10MB×5 まで残し、古いものから消す（OP-10: ディスクがログで埋まらないように）
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   db:
+    logging: *logging
     image: postgres:17.6-alpine
     restart: unless-stopped
     environment:
@@ -22,6 +30,7 @@ services:
       retries: 30
 
   api:
+    logging: *logging
     build: { context: .., dockerfile: infra/Dockerfile, target: api }
     image: hanamaru-api:${RELEASE:-local}
     restart: unless-stopped
@@ -38,9 +47,16 @@ services:
       STRIPE_PORTAL_CONFIGURATION_ID: ${STRIPE_PORTAL_CONFIGURATION_ID:-}
       TURNSTILE_SECRET: ${TURNSTILE_SECRET:-}
       JOB_INTERVAL_MINUTES: "5"
+      # システムの状態の画面（OP-08）に出す版と、バックアップの成否
+      APP_VERSION: ${APP_VERSION:-${RELEASE:-local}}
+      APP_BUILT_AT: ${APP_BUILT_AT:-}
+      BACKUP_STATUS_FILE: /status/backup-last-success
       TZ: Asia/Tokyo
+    volumes:
+      - status:/status:ro
 
   web:
+    logging: *logging
     build:
       context: ..
       dockerfile: infra/Dockerfile
@@ -50,7 +66,9 @@ services:
         VITE_TERMS_URL: ${TERMS_URL:-}
     image: hanamaru-web:${RELEASE:-local}
     restart: unless-stopped
-    depends_on: [api]
+    # API が起動してデータベースに届くようになってから（Dockerfile の HEALTHCHECK → /api/health）
+    depends_on:
+      api: { condition: service_healthy }
     environment:
       STUDENT_HOST: ${STUDENT_HOST}
       STAFF_HOST: ${STAFF_HOST}
@@ -58,6 +76,7 @@ services:
 
   # Cloudflare Tunnel。ダッシュボードで「公開ホスト名 → http://web:80」を3つ登録する（docs/operations.md）
   tunnel:
+    logging: *logging
     image: cloudflare/cloudflared:2025.10.0
     restart: unless-stopped
     command: tunnel --no-autoupdate run
@@ -67,6 +86,7 @@ services:
 
   # 毎日のバックアップを Cloudflare R2 に送る（5.4）
   backup:
+    logging: *logging
     build: { context: backup }
     image: hanamaru-backup:${RELEASE:-local}
     restart: unless-stopped
@@ -85,7 +105,10 @@ services:
       TZ: Asia/Tokyo
     volumes:
       - backups:/backups
+      - status:/status
 
 volumes:
   db:
   backups:
+  # バックアップの最後の成功時刻（backup が書き、api が読む）
+  status:

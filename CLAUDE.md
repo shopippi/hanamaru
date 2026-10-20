@@ -36,6 +36,7 @@
   - `src/http/` HTTP の入口（Hono）。ポータルごとに `/api/student`・`/api/staff`・`/api/manage`。認証と入出力の変換だけを行う
   - `src/integrations/stripe.ts` Stripe の実装。業務ルールからは `domain/payment-gateway.ts` の形だけを使い、テストでは `test/fake-gateway.ts` に差し替える
   - `src/domain/jobs.ts` 定期処理（数分おきに全部流す。どれも何度実行しても結果が同じになるように書く）
+  - `src/domain/system.ts` 処理の見張りと管理者への通知（`trackedRun`）、通知の再送、古い記録の片付け、システムの状態（OP-05〜OP-08）。定期処理を足したら `JOB_LABELS` にも足す
   - `scripts/stripe-setup.ts` Stripe の初期設定（カスタマーポータル）
   - 講師プロフィールはデータベース（`teachers`・`teacher_photos`、`domain/teacher-profiles.ts`）。`data/teacher-profiles.json` は取り込み（`scripts/import-teacher-profiles.ts`）と開発用の見本だけに使う（TC-06）
   - `test/` 受入テスト（PGlite のメモリ上の PostgreSQL で動く）

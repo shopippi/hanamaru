@@ -10,6 +10,7 @@ import { Dashboard } from './pages/Dashboard.js';
 import { Login } from './pages/Login.js';
 import { Audit, Closures, SettingsPage, Trials } from './pages/Misc.js';
 import { Charges, Payments, Pricing } from './pages/Money.js';
+import { SystemPage } from './pages/System.js';
 import { StudentDetail } from './pages/StudentDetail.js';
 import { SchoolHours } from './pages/SchoolHours.js';
 import { Students } from './pages/Students.js';
@@ -41,6 +42,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/closures" element={<Closures />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/audit" element={<Audit />} />
+            <Route path="/system" element={<SystemPage />} />
           </Route>
         </Routes>
       </ToastProvider>

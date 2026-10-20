@@ -57,16 +57,33 @@ describe('TC-06 管理者が講師を増やし、プロフィールと写真を�
     await expect(updateProfileAsAdmin(f.ctx, f.teacherA.actor, id, { instruments: [], career: '', message: '' })).rejects.toMatchObject({ code: 'forbidden' });
   });
 
-  test('TC-06 写真は JPEG・PNG・WebP だけ、中身が合っていて、設定の大きさまで', async () => {
+  test('TC-06 写真は JPEG・PNG・WebP だけで、中身が合っているものを受け付ける', async () => {
     const f = await setup();
     const id = f.teacherA.teacher.id;
     await expect(setPhotoAsAdmin(f.ctx, f.admin, id, photo(JPEG, 'image/gif'))).rejects.toThrow('JPEG・PNG・WebP');
     await expect(setPhotoAsAdmin(f.ctx, f.admin, id, photo(PNG, 'image/jpeg'))).rejects.toThrow('読めませんでした');
-    await updateSettings(f.db, { teacherPhotoMaxKB: 50 }, null);
-    const big = Buffer.concat([JPEG, Buffer.alloc(51 * 1024)]);
-    await expect(setPhotoAsAdmin(f.ctx, f.admin, id, photo(big))).rejects.toThrow('50KBまで');
     await setPhotoAsAdmin(f.ctx, f.admin, id, photo(PNG, 'image/png'));
-    expect((await profileForAdmin(f.ctx, f.admin, id)).photo).toMatch(/^\/api\/teachers\/.+\/photo\?v=\d+$/);
+    const p = await profileForAdmin(f.ctx, f.admin, id);
+    expect(p.photo).toMatch(/^\/api\/teachers\/.+\/photo\?v=\d+$/);
+    expect(p).toMatchObject({ photoSize: PNG.length, photoLarge: false });
+  });
+
+  test('TC-06 おすすめの大きさ（初期値 800KB）を超えた写真も受け付け、大きめだと分かる。上限（初期値 15MB）を超えると日本語で断る', async () => {
+    const f = await setup();
+    const id = f.teacherA.teacher.id;
+    const big = Buffer.concat([JPEG, Buffer.alloc(900 * 1024)]);
+    await setPhotoAsAdmin(f.ctx, f.admin, id, photo(big));
+    expect(await profileForAdmin(f.ctx, f.admin, id)).toMatchObject({ photoSize: big.length, photoLarge: true });
+    // 講師本人の画面でも大きめだと分かる（TC-07）
+    await setMyPhoto(f.ctx, f.teacherA.actor, photo(big));
+    expect(await myProfile(f.ctx, f.teacherA.actor)).toMatchObject({ photoLarge: true });
+    // 画質を下げて送り直すと、大きめの表示は消える
+    await setPhotoAsAdmin(f.ctx, f.admin, id, photo(JPEG));
+    expect((await profileForAdmin(f.ctx, f.admin, id)).photoLarge).toBe(false);
+    // 上限はサーバーを守るためだけのもの
+    await updateSettings(f.db, { teacherPhotoHardMaxMB: 1 }, null);
+    const huge = Buffer.concat([JPEG, Buffer.alloc(1024 * 1024)]);
+    await expect(setPhotoAsAdmin(f.ctx, f.admin, id, photo(huge))).rejects.toThrow('写真が大きすぎます（1MBまで）');
   });
 });
 
