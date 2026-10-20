@@ -43,18 +43,15 @@ test('MB-01 / RS-01 / RS-04 / UI-15 トップで状況が分かり、予約し�
   await expect(remaining).toHaveText(new RegExp(`^${before}`));
 });
 
-test('ST-04 保護者は子どもを切り替えられる', async ({ page }) => {
-  await login(page, STUDENT, 'parent@example.test');
-  await page.getByRole('button', { name: '山田 さくら' }).click();
-  await expect(page.getByRole('button', { name: '山田 さくら' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByLabel('表示中の生徒')).toHaveText('山田 さくら');
-  await page.getByRole('button', { name: '山田 太郎' }).click();
-});
-
 test('TC-05 担当講師のプロフィールを見られる', async ({ page }) => {
   await login(page, STUDENT, 'parent@example.test');
   await page.getByRole('link', { name: '講師' }).click();
-  await expect(page.getByRole('heading', { name: '松田 悠義' })).toBeVisible();
+  // 名前を押すと、プロフィールが下へ開く（アコーディオン）
+  const trigger = page.getByRole('button', { name: /松田 悠義/ });
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await trigger.click();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('region', { name: '松田 悠義のプロフィール' }).getByText('経歴')).toBeVisible();
 });
 
 test('PW-04 電波がないときは案内を出し、予約できない', async ({ page, context }) => {
