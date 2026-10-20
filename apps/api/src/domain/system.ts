@@ -294,7 +294,7 @@ export async function systemStatus(ctx: Ctx, actor: Actor) {
   for (const j of jobs) if (j.state === 'attention') attention.push(j.stale ? `「${j.label}」が動いていません` : `「${j.label}」が失敗しています`);
   if (stripeWebhook.state === 'attention') attention.push('Stripe の通知の処理が失敗しています');
   if (gaveUp > 0) attention.push(`届けられなかった通知が${gaveUp}件あります`);
-  if (backup.state === 'attention') attention.push('バックアップが36時間以上成功していません');
+  if (backup.state === 'attention') attention.push(backupAt ? 'バックアップが36時間以上成功していません' : 'バックアップの成功の記録がありません');
   if (database.state === 'attention') attention.push('データベースの更新が終わっていません');
 
   return {

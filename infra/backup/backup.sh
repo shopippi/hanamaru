@@ -15,6 +15,8 @@ backup_once() {
       -T "/backups/$name" \
       "$R2_ENDPOINT/$R2_BUCKET/$name"
     echo "uploaded $name"
+    # システムの状態の画面（OP-08）に出す。VPS の外（R2）へ送れたときだけ成功とする
+    mkdir -p /status && date -Iseconds > /status/backup-last-success.tmp && mv /status/backup-last-success.tmp /status/backup-last-success
   else
     echo "R2 is not configured: kept $name locally only" >&2
   fi
