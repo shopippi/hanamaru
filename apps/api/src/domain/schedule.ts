@@ -182,7 +182,7 @@ export const closureInput = z
   .refine((c) => (c.startTime === null) === (c.endTime === null), { message: '開始と終了の両方を入力してください' });
 
 /** 休講日・臨時休講（AV-04）。既存の予約は「教室都合のキャンセル」として取り消し、回数を戻す */
-export async function createClosure(ctx: Ctx, actor: Actor, raw: z.input<typeof closureInput>) {
+export async function createClosure(ctx: Ctx, actor: Actor, raw: unknown) {
   assertAdmin(actor);
   const parsed = closureInput.safeParse(raw);
   if (!parsed.success) throw invalid(parsed.error.issues[0]?.message ?? '入力に誤りがあります');

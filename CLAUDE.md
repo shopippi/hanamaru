@@ -24,12 +24,15 @@
 - 時刻はすべて日本時間（`lib/time.ts`）。月は 'YYYY-MM'、日付は 'YYYY-MM-DD'
 - 他人の生徒・予約は「見つからない」（not_found）として扱い、存在も知らせない（5.2）
 - エラーの文言は画面にそのまま出せる日本語で書く
+- 状態を変える API は JSON だけを受け付ける（CSRF 対策）。Cookie はポータルごとに分ける（4.4）
 
 ## 構成
 
 - `apps/api/` API と業務ルール（Hono、Drizzle、PostgreSQL）
   - `src/db/schema.ts` テーブル定義。変えたら `pnpm --filter @hanamaru/api db:generate` でマイグレーションを作る
   - `src/domain/` 業務ルール
+  - `src/http/` HTTP の入口（Hono）。ポータルごとに `/api/student`・`/api/staff`・`/api/manage`。認証と入出力の変換だけを行う
+  - `data/teacher-profiles.json` 講師プロフィール（TC-06）
   - `test/` 受入テスト（PGlite のメモリ上の PostgreSQL で動く）
 - `docs/` 要件定義書、検証報告、設計の決定（ADR）
 

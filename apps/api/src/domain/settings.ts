@@ -49,6 +49,9 @@ export const settingsSchema = z.object({
   /** ログインの失敗回数の上限と、ロックする分数（AU-05） */
   maxFailedLogins: z.number().int().min(1),
   lockMinutes: z.number().int().min(1),
+  /** パスワード再設定リンクの有効時間（AU-03）と、招待リンクの有効日数（ST-01） */
+  resetTokenMinutes: z.number().int().min(5).max(24 * 60),
+  inviteTokenDays: z.number().int().min(1).max(30),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -79,6 +82,8 @@ export const DEFAULT_SETTINGS: Settings = {
   sessionDays: 60,
   maxFailedLogins: 5,
   lockMinutes: 15,
+  resetTokenMinutes: 60,
+  inviteTokenDays: 7,
 };
 
 export async function getSettings(db: Db): Promise<Settings> {
