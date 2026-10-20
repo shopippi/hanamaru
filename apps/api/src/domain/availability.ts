@@ -6,13 +6,14 @@ import {
   closures,
   lessonTypes,
   reservations,
+  schoolHours,
   teachers,
 } from '../db/schema.js';
 import { addDays, jst, minutesOf, weekdayOf, type DateStr } from '../lib/time.js';
-import { getSettings, type Settings } from './settings.js';
 
-// 講師の空き時間（AV-01）から、予約できる枠を作る。
-// 曜日ごとの時間帯 + その日だけの追加 − その日の不在 − 休講（AV-04）、を営業時間（3.8）の範囲に収める。
+// 講師の空き時間（AV-01、AV-07）から、予約できる枠を作る（AV-08）。
+// 講師: 毎週の型（その日を日ごとに決めた日は型を使わない）+ その日だけの追加 − その日の不在。
+// これを教室の受付時間（AV-06。日付ごと。ない日は受け付けない）の中に収め、休講（AV-04）を除く。
 
 export interface Window {
   teacherId: string;
@@ -35,7 +36,7 @@ export interface Slot {
   booked: number;
 }
 
-type Interval = { start: number; end: number };
+export type Interval = { start: number; end: number };
 
 const overlaps = (a: Interval, b: Interval) => a.start < b.end && b.start < a.end;
 
@@ -43,12 +44,13 @@ interface AvailabilityData {
   rules: (typeof availabilityRules.$inferSelect)[];
   exceptions: (typeof availabilityExceptions.$inferSelect)[];
   closures: (typeof closures.$inferSelect)[];
-  settings: Settings;
+  school: (typeof schoolHours.$inferSelect)[];
 }
 
 async function loadData(db: Db, teacherIds: string[], from: DateStr, to: DateStr): Promise<AvailabilityData> {
-  if (teacherIds.length === 0) return { rules: [], exceptions: [], closures: [], settings: await getSettings(db) };
-  const [rules, exceptions, closureRows, settings] = await Promise.all([
+  const inRange = <T extends typeof closures.date | typeof schoolHours.date>(col: T) => and(gte(col, from), lt(col, addDays(to, 1)));
+  if (teacherIds.length === 0) return { rules: [], exceptions: [], closures: [], school: [] };
+  const [rules, exceptions, closureRows, school] = await Promise.all([
     db.select().from(availabilityRules).where(inArray(availabilityRules.teacherId, teacherIds)),
     db
       .select()
@@ -60,10 +62,44 @@ async function loadData(db: Db, teacherIds: string[], from: DateStr, to: DateStr
           lt(availabilityExceptions.date, addDays(to, 1)),
         ),
       ),
-    db.select().from(closures).where(and(gte(closures.date, from), lt(closures.date, addDays(to, 1)))),
-    getSettings(db),
+    db.select().from(closures).where(inRange(closures.date)),
+    db.select().from(schoolHours).where(inRange(schoolHours.date)),
   ]);
-  return { rules, exceptions, closures: closureRows, settings };
+  return { rules, exceptions, closures: closureRows, school };
+}
+
+/** その日の教室の受付時間（AV-06）。ない日は空 */
+export function schoolWindowsOf(rows: { date: string; startTime: string; endTime: string }[], date: DateStr): Interval[] {
+  return rows
+    .filter((r) => r.date === date)
+    .map((r) => ({ start: minutesOf(r.startTime), end: minutesOf(r.endTime) }))
+    .sort((a, b) => a.start - b.start);
+}
+
+/** 講師のその日の空き時間（教室の受付時間で切る前）。日ごとに決めた日（override）は毎週の型を使わない（AV-07） */
+export function teacherWindowsOf(
+  rules: (typeof availabilityRules.$inferSelect)[],
+  exceptions: (typeof availabilityExceptions.$inferSelect)[],
+  teacherId: string,
+  date: DateStr,
+): { windows: Omit<Window, 'teacherId' | 'date'>[]; overridden: boolean } {
+  const mine = exceptions.filter((e) => e.teacherId === teacherId && e.date === date);
+  const overridden = mine.some((e) => e.kind === 'override');
+  const windows: Omit<Window, 'teacherId' | 'date'>[] = [];
+  if (!overridden) {
+    const weekday = weekdayOf(date);
+    for (const r of rules) {
+      if (r.teacherId === teacherId && r.weekday === weekday) {
+        windows.push({ start: minutesOf(r.startTime), end: minutesOf(r.endTime), lessonTypeId: r.lessonTypeId, roomId: r.roomId, forTrial: r.forTrial });
+      }
+    }
+  }
+  for (const e of mine) {
+    if (e.kind === 'extra' && e.startTime && e.endTime && e.lessonTypeId) {
+      windows.push({ start: minutesOf(e.startTime), end: minutesOf(e.endTime), lessonTypeId: e.lessonTypeId, roomId: e.roomId, forTrial: e.forTrial });
+    }
+  }
+  return { windows: windows.sort((a, b) => a.start - b.start), overridden };
 }
 
 function blockedIntervals(data: AvailabilityData, teacherId: string, date: DateStr): Interval[] {
@@ -79,27 +115,16 @@ function blockedIntervals(data: AvailabilityData, teacherId: string, date: DateS
   return out;
 }
 
-/** その日の空き時間帯（予約の有無は見ない） */
+/** その日の予約できる時間帯（予約の有無は見ない）。講師の空き時間 ∩ 教室の受付時間（AV-08） */
 function windowsFor(data: AvailabilityData, teacherId: string, date: DateStr): { windows: Window[]; blocked: Interval[] } {
-  const weekday = weekdayOf(date);
-  const hours = data.settings.businessHours[weekday];
-  if (!hours) return { windows: [], blocked: [] };
-  const open = minutesOf(hours.open);
-  const close = minutesOf(hours.close);
+  const school = schoolWindowsOf(data.school, date);
+  if (school.length === 0) return { windows: [], blocked: [] };
   const windows: Window[] = [];
-  const push = (start: number, end: number, lessonTypeId: string | null, roomId: string | null, forTrial: boolean) => {
-    const s = Math.max(start, open);
-    const e = Math.min(end, close);
-    if (lessonTypeId && s < e) windows.push({ teacherId, date, start: s, end: e, lessonTypeId, roomId, forTrial });
-  };
-  for (const r of data.rules) {
-    if (r.teacherId === teacherId && r.weekday === weekday) {
-      push(minutesOf(r.startTime), minutesOf(r.endTime), r.lessonTypeId, r.roomId, r.forTrial);
-    }
-  }
-  for (const e of data.exceptions) {
-    if (e.teacherId === teacherId && e.date === date && e.kind === 'extra' && e.startTime && e.endTime) {
-      push(minutesOf(e.startTime), minutesOf(e.endTime), e.lessonTypeId, e.roomId, e.forTrial);
+  for (const t of teacherWindowsOf(data.rules, data.exceptions, teacherId, date).windows) {
+    for (const s of school) {
+      const start = Math.max(t.start, s.start);
+      const end = Math.min(t.end, s.end);
+      if (start < end) windows.push({ ...t, teacherId, date, start, end });
     }
   }
   return { windows, blocked: blockedIntervals(data, teacherId, date) };
