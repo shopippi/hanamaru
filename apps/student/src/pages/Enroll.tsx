@@ -95,7 +95,7 @@ export function Enroll() {
                 <h2 className="field-label" id="terms-title">
                   契約の内容
                 </h2>
-                <dl className="summary">
+                <dl className="summary prose">
                   <div>
                     <dt>期間</dt>
                     <dd>退会のお申し出まで、毎月続きます</dd>
