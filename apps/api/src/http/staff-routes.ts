@@ -11,6 +11,7 @@ import {
   studentDetailForTeacher,
   studentsOfTeacher,
 } from '../domain/people.js';
+import { markAllReviewsChecked, markReviewChecked, reviewsForTeacher } from '../domain/reviews.js';
 import { availabilityChange, availabilityOf, changeAvailability, setTeacherDay, teacherCalendar } from '../domain/schedule.js';
 import { jst } from '../lib/time.js';
 import { body, dateParam, monthParam, query, rawBody, requireAuth, type AppDeps, type Env } from './app.js';
@@ -24,7 +25,7 @@ export function staffRoutes(deps: AppDeps) {
 
   app.route('/auth', authRoutes(deps, 'staff'));
   const auth = requireAuth(deps, 'staff');
-  for (const p of ['/lessons', '/lessons/*', '/students', '/students/*', '/availability', '/availability/*', '/lesson-types', '/rooms']) {
+  for (const p of ['/lessons', '/lessons/*', '/students', '/students/*', '/availability', '/availability/*', '/lesson-types', '/rooms', '/reviews', '/reviews/*']) {
     app.use(p, auth);
   }
 
@@ -76,6 +77,13 @@ export function staffRoutes(deps: AppDeps) {
     const t = await myTeacher(c);
     const input = (await rawBody(c)) as { confirm?: unknown };
     return c.json(await setTeacherDay(ctx, c.get('actor'), t.id, input, input?.confirm === true));
+  });
+  // 自分へのレビュー（RV-04、RV-05）
+  app.get('/reviews', async (c) => c.json(await reviewsForTeacher(ctx, c.get('actor'))));
+  app.post('/reviews/check-all', async (c) => c.json({ checked: await markAllReviewsChecked(ctx, c.get('actor')) }));
+  app.post('/reviews/:id/check', async (c) => {
+    await markReviewChecked(ctx, c.get('actor'), c.req.param('id'));
+    return c.json({ ok: true });
   });
   app.get('/lesson-types', async (c) => c.json(await listLessonTypes(ctx)));
   app.get('/rooms', async (c) => c.json(await listRooms(ctx)));

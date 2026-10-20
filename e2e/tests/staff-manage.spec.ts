@@ -10,7 +10,7 @@ test('SR-06 講師には住所が表示されず、講師用備考を書ける',
   await login(page, STAFF, 'teacher@example.test');
   await expect(page.getByRole('heading', { name: '担当レッスン' })).toBeVisible();
   await page.getByRole('navigation').getByRole('link', { name: '担当生徒', exact: true }).click();
-  await page.getByRole('link', { name: '山田 太郎' }).click();
+  await page.getByRole('link', { name: '山田 はな太郎' }).click();
   await expect(page.getByLabel('講師用備考')).toHaveValue(/左手/);
   await expect(page.getByText('千代田区')).toHaveCount(0);
 });
@@ -30,7 +30,7 @@ test('AU-06 / DB-01 管理者は二段階認証のあとダッシュボードを
   await expect(page.getByText('生徒の人数')).toBeVisible();
   await page.getByRole('link', { name: /在籍中/ }).click();
   await expect(page).toHaveURL(/status=active/);
-  await expect(page.getByRole('link', { name: '山田 太郎' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '山田 はな太郎' })).toBeVisible();
 });
 
 test('3.8 設定を変えて保存できる', async ({ page }) => {

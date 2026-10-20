@@ -41,8 +41,14 @@ export function AddToHomeGuide() {
       e.preventDefault();
       setPrompt(e as InstallPrompt);
     };
+    // 追加が済んだら、その場で案内を消す
+    const onInstalled = () => setDismissed(true);
     window.addEventListener('beforeinstallprompt', onPrompt);
-    return () => window.removeEventListener('beforeinstallprompt', onPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
   }, []);
   if (isStandalone() || dismissed || isInAppBrowser()) return null;
   const dismiss = () => {

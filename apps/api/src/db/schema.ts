@@ -541,3 +541,24 @@ export const trialRequests = pgTable('trial_requests', {
   status: trialStatusEnum('status').notNull().default('new'),
   createdAt: createdAt(),
 });
+
+/**
+ * 講師へのレビュー（RV-01〜）。講師の名前をキーに残し、生徒を消しても消えない（生徒の名前は書いた時点の写しを持つ）。
+ * teacher_id は講師の画面で探すための参照で、講師を消しても名前で残る
+ */
+export const reviews = pgTable(
+  'reviews',
+  {
+    id: id(),
+    teacherName: text('teacher_name').notNull(),
+    teacherId: uuid('teacher_id').references(() => teachers.id, { onDelete: 'set null' }),
+    studentId: uuid('student_id').references(() => students.id, { onDelete: 'set null' }),
+    authorName: text('author_name').notNull(),
+    body: text('body').notNull(),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+    /** 講師が確認した日時。null は未確認（書き直すと null に戻る） */
+    checkedAt: ts('checked_at'),
+  },
+  (t) => [index('reviews_teacher_name_idx').on(t.teacherName), index('reviews_student_idx').on(t.studentId)],
+);

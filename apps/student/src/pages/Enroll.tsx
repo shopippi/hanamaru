@@ -11,7 +11,7 @@ interface Options {
   packages: { id: string; name: string; lessonCount: number; admissionFee: number; lessonsPrice: number; total: number }[];
   course: { name: string; lessonsPerMonth: number; amount: number | null } | null;
   methods: { method: 'card' | 'konbini' | 'paypay'; label: string; recommended: boolean }[];
-  terms: { cancelDeadlineHours: number; cancelDeadline: string; graceDays: number; carryover: boolean };
+  terms: { cancelDeadlineHours: number; cancelDeadline: string; carryover: boolean };
 }
 
 export function Enroll() {
@@ -122,10 +122,6 @@ export function Enroll() {
                       <dd>その月に使わなかった回数は、翌月末まで使えます</dd>
                     </div>
                   )}
-                  <div>
-                    <dt>未払い</dt>
-                    <dd>毎月1日から{o.terms.graceDays}日たってもお支払いを確認できない場合、その月のご予約は取り消しになります</dd>
-                  </div>
                 </dl>
                 <Checkbox label="契約の内容と利用規約に同意します" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
                 {TERMS_URL && (
@@ -137,9 +133,16 @@ export function Enroll() {
                 )}
               </section>
               {selected && (
-                <Button type="submit" block pending={pay.pending} disabled={!online || !agreed} pendingLabel="お支払い画面へ移動しています…">
-                  {fmtYen(selected.total)}（税込）を支払う
-                </Button>
+                <div className="stack-sm">
+                  <p className="spread enroll-total">
+                    <span className="secondary">お支払い金額（税込）</span>
+                    <strong className="num">{fmtYen(selected.total)}</strong>
+                  </p>
+                  <Button type="submit" block pending={pay.pending} disabled={!online || !agreed} pendingLabel="お支払い画面へ移動しています…">
+                    申し込む
+                  </Button>
+                  <p className="small muted center">次の画面でカードの情報を入れて、お支払いを済ませます。</p>
+                </div>
               )}
               <p className="small muted">領収書は決済サービス（Stripe）からメールでお送りします。解約・休会は教室にご連絡ください。</p>
             </form>

@@ -264,11 +264,10 @@ export async function enrollmentOptions(ctx: Ctx, actor: Actor, studentId: strin
   const settings = await getSettings(ctx.db);
   return {
     status: s.status,
-    /** 入会画面で同意を取る契約の内容に使う値（3.8 の設定値） */
+    /** 入会画面で同意を取る契約の内容に使う値（3.8 の設定値）。未払いの扱いは未確定のため出さない（PY-10 の処理は変えない） */
     terms: {
       cancelDeadlineHours: settings.cancelDeadlineHours,
       cancelDeadline: cancelDeadlineLabel(settings),
-      graceDays: settings.graceDays,
       carryover: settings.carryoverEnabled && settings.carryoverMax > 0,
     },
     packages: packages.map((p) => ({

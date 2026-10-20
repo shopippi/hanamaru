@@ -13,6 +13,7 @@ import { listLessonTypes } from '../domain/catalog.js';
 import { DomainError } from '../domain/errors.js';
 import { myStudents, studentHome } from '../domain/home.js';
 import { register, registrationOptions, teacherProfilesForStudent } from '../domain/registration.js';
+import { createReview, deleteReview, myReviewsPage, updateReview } from '../domain/reviews.js';
 import { bookPublicTrial, publicTrialSlots, submitTrialRequest } from '../domain/trial.js';
 import { body, rawBody, dateParam, isoDateTime, query, requireAuth, type AppDeps, type Env } from './app.js';
 import { authRoutes } from './auth-routes.js';
@@ -103,6 +104,16 @@ export function studentRoutes(deps: AppDeps) {
   });
   // カードの変更は Stripe のカード管理画面で（MB-04）
   app.post('/students/:sid/monthly-payment', async (c) => c.json(await startMonthlyPayment(ctx, c.get('actor'), c.req.param('sid'))));
+  // 講師へのレビュー（RV-01〜03）。自分のレビューだけを見る・直す・消す
+  app.get('/students/:sid/reviews', async (c) => c.json(await myReviewsPage(ctx, c.get('actor'), c.req.param('sid'))));
+  app.post('/students/:sid/reviews', async (c) => c.json(await createReview(ctx, c.get('actor'), c.req.param('sid'), await rawBody(c)), 201));
+  app.patch('/students/:sid/reviews/:rid', async (c) =>
+    c.json(await updateReview(ctx, c.get('actor'), c.req.param('sid'), c.req.param('rid'), await rawBody(c))),
+  );
+  app.delete('/students/:sid/reviews/:rid', async (c) => {
+    await deleteReview(ctx, c.get('actor'), c.req.param('sid'), c.req.param('rid'));
+    return c.json({ ok: true });
+  });
   app.post('/students/:sid/card-registration', async (c) => c.json(await startCardRegistration(ctx, c.get('actor'), c.req.param('sid'))));
   app.post('/students/:sid/billing-portal', async (c) => c.json(await billingPortal(ctx, c.get('actor'), c.req.param('sid'))));
 

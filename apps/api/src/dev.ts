@@ -143,7 +143,8 @@ async function seed(db: Db, ctx: Ctx) {
   }
   const course = courseOf.get(4)!;
 
-  const parent = await mkAccount('student', 'parent@example.test', '山田 花子');
+  // 見本の生徒は2人。家庭（ログイン）は別々なので、ほかの生徒の情報は見えない（5.2）
+  const parent = await mkAccount('student', 'parent@example.test', '山田 はな子');
   const mkStudent = async (name: string, values: Partial<typeof schema.students.$inferInsert>, teacherIds: string[], credits = 0) => {
     const [s] = await db
       .insert(schema.students)
@@ -153,10 +154,11 @@ async function seed(db: Db, ctx: Ctx) {
     if (credits) await db.insert(schema.creditLedger).values({ studentId: s!.id, month, delta: credits, reason: 'grant_monthly', note: '見本' });
     return s!;
   };
-  await mkStudent('山田 太郎', { phone: '090-0000-0001', address: '東京都千代田区1-1', teacherNote: '左手の練習を重点的に' }, [tA.id, tB.id], 4);
-  await mkStudent('山田 さくら', { phone: '090-0000-0002' }, [tA.id], 2);
-  const solo = await mkAccount('student', 'new@example.test', '佐藤 一郎');
-  await db.insert(schema.students).values({ accountId: solo.id, name: '佐藤 一郎', status: 'enrolling', courseId: course.id });
+  await mkStudent('山田 はな太郎', { phone: '090-0000-0001', address: '東京都千代田区1-1', teacherNote: '左手の練習を重点的に' }, [tA.id, tB.id], 4);
+  // 入会手続き中の見本（入会の流れを試す）
+  const maruko = await mkAccount('student', 'maruko@example.test', '田中 まる子');
+  const [m] = await db.insert(schema.students).values({ accountId: maruko.id, name: '田中 まる子', status: 'enrolling', courseId: course.id }).returning();
+  await db.insert(schema.studentTeachers).values({ studentId: m!.id, teacherId: tA.id });
 }
 
 async function openDb(): Promise<Db> {
@@ -255,6 +257,6 @@ app.route('/dev', dev);
 
 serve({ fetch: app.fetch, port: PORT }, () => {
   console.log(`dev api on ${API_ORIGIN}`);
-  console.log('ログイン: 生徒 parent@example.test / 講師 teacher@example.test / 管理 admin@example.test（パスワードはすべて password）');
+  console.log('ログイン: 生徒 parent@example.test（入会手続き中は maruko@example.test） / 講師 teacher@example.test / 管理 admin@example.test（パスワードはすべて password）');
   console.log(`管理者の確認コード: ${API_ORIGIN}/dev/totp`);
 });

@@ -58,5 +58,5 @@ pnpm dev                                    # 開発用サーバー（メモリ�
 pnpm e2e                                    # 画面の通しテスト
 ```
 
-開発用サーバーのログイン: 生徒 parent@example.test / 講師 teacher@example.test / 管理 admin@example.test（パスワードは password、管理者の確認コードは http://localhost:3000/dev/totp）。
+開発用サーバーのログイン: 生徒 parent@example.test（山田 はな太郎）・maruko@example.test（田中 まる子、入会手続き中） / 講師 teacher@example.test / 管理 admin@example.test（パスワードは password、管理者の確認コードは http://localhost:3000/dev/totp）。
 画面は 生徒 http://localhost:5173 ・講師 :5174 ・管理 :5175。
