@@ -4,7 +4,11 @@ import {
   Button,
   Empty,
   Loadable,
+  IconPlus,
+  IconUpload,
+  IconUsers,
   Notice,
+  PageHeader,
   STUDENT_STATUS_LABEL,
   Select,
   Skeleton,
@@ -32,71 +36,89 @@ export function Students() {
   const [mode, setMode] = useState<'list' | 'new' | 'csv'>('list');
 
   return (
-    <div className="stack-lg">
-      <div className="spread">
-        <h1 style={{ margin: 0 }}>生徒</h1>
-        <div className="row">
-          <Button variant="secondary" onClick={() => setMode(mode === 'csv' ? 'list' : 'csv')}>
-            CSVで登録
-          </Button>
-          <Button onClick={() => setMode(mode === 'new' ? 'list' : 'new')}>生徒を登録</Button>
-        </div>
-      </div>
-      {mode === 'new' && <NewStudent onDone={() => (setMode('list'), reload())} />}
-      {mode === 'csv' && <CsvImport onDone={() => (setMode('list'), reload())} />}
-      <div className="row" role="group" aria-label="状態で絞り込む">
-        {[['', 'すべて'], ...Object.entries(STUDENT_STATUS_LABEL)].map(([k, label]) => (
-          <button key={k} type="button" className="choice" style={{ width: 'auto' }} aria-pressed={!pending && status === k} onClick={() => setParams(k ? { status: k } : {})}>
-            {label}
-          </button>
-        ))}
-        <button type="button" className="choice" style={{ width: 'auto' }} aria-pressed={pending} onClick={() => setParams({ pending: '1' })}>
-          承認待ち
-        </button>
-      </div>
-      <Loadable state={state} reload={reload} skeleton={<Skeleton lines={8} />}>
-        {(list) =>
-          list.length === 0 ? (
-            <Empty message="該当する生徒はいません" action={<Button onClick={() => setMode('new')}>生徒を登録</Button>} />
-          ) : (
-            <div className="table-wrap">
-              <p className="small muted">{list.length}人</p>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th scope="col">名前</th>
-                    <th scope="col">状態</th>
-                    <th scope="col">保護者</th>
-                    <th scope="col">ログインメール</th>
-                    <th scope="col">電話</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.map((s) => (
-                    <tr key={s.id}>
-                      <td>
-                        <Link to={`/students/${s.id}`}>{s.name}</Link>
-                      </td>
-                      <td>
-                        {STUDENT_STATUS_LABEL[s.status]}
-                        {!s.approved && <span className="badge" style={{ marginLeft: 4 }}>承認待ち</span>}
-                        {s.scheduledStatus && s.scheduledStatusAt && (
-                          <div className="small muted">
-                            {fmtDate(s.scheduledStatusAt)}から{STUDENT_STATUS_LABEL[s.scheduledStatus]}
-                          </div>
-                        )}
-                      </td>
-                      <td>{s.guardianName ?? '—'}</td>
-                      <td>{s.accountEmail}</td>
-                      <td>{s.phone ?? '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
+    <div>
+      <PageHeader
+        title="生徒"
+        description="在籍・休会・退会の状態と、連絡先を管理します。"
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => setMode(mode === 'csv' ? 'list' : 'csv')} aria-expanded={mode === 'csv'}>
+              <IconUpload size={18} />
+              CSVで登録
+            </Button>
+            <Button onClick={() => setMode(mode === 'new' ? 'list' : 'new')} aria-expanded={mode === 'new'}>
+              <IconPlus size={18} />
+              生徒を登録
+            </Button>
+          </>
         }
-      </Loadable>
+      />
+      <div className="stack-lg">
+        {mode === 'new' && <NewStudent onDone={() => (setMode('list'), reload())} />}
+        {mode === 'csv' && <CsvImport onDone={() => (setMode('list'), reload())} />}
+        <div className="tabs" role="group" aria-label="状態で絞り込む">
+          {[['', 'すべて'], ...Object.entries(STUDENT_STATUS_LABEL)].map(([k, label]) => (
+            <button key={k} type="button" aria-pressed={!pending && status === k} onClick={() => setParams(k ? { status: k } : {})}>
+              {label}
+            </button>
+          ))}
+          <button type="button" aria-pressed={pending} onClick={() => setParams({ pending: '1' })}>
+            承認待ち
+          </button>
+        </div>
+        <Loadable state={state} reload={reload} skeleton={<Skeleton lines={8} />}>
+          {(list) =>
+            list.length === 0 ? (
+              <div className="panel">
+                <Empty icon={<IconUsers />} message="該当する生徒はいません" text="絞り込みを変えるか、生徒を登録してください。" action={<Button onClick={() => setMode('new')}>生徒を登録</Button>} />
+              </div>
+            ) : (
+              <div className="table-wrap">
+                <table className="table">
+                  <caption className="table-caption">{list.length}人</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">名前</th>
+                      <th scope="col">状態</th>
+                      <th scope="col">保護者</th>
+                      <th scope="col">ログインメール</th>
+                      <th scope="col">電話</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {list.map((s) => (
+                      <tr key={s.id}>
+                        <td>
+                          <span className="person">
+                            <span className="avatar avatar-sm" aria-hidden="true">
+                              {(s.name.trim().split(/\s+/).pop() ?? s.name).slice(0, 1)}
+                            </span>
+                            <Link to={`/students/${s.id}`}>{s.name}</Link>
+                          </span>
+                        </td>
+                        <td>
+                          <span className="row-tight">
+                            <span className={s.status === 'active' ? 'badge badge-dot' : 'badge'}>{STUDENT_STATUS_LABEL[s.status]}</span>
+                            {!s.approved && <span className="badge badge-strong">承認待ち</span>}
+                          </span>
+                          {s.scheduledStatus && s.scheduledStatusAt && (
+                            <div className="small muted">
+                              {fmtDate(s.scheduledStatusAt)}から{STUDENT_STATUS_LABEL[s.scheduledStatus]}
+                            </div>
+                          )}
+                        </td>
+                        <td>{s.guardianName ?? <span className="muted">—</span>}</td>
+                        <td>{s.accountEmail}</td>
+                        <td className="num">{s.phone ?? <span className="muted">—</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          }
+        </Loadable>
+      </div>
     </div>
   );
 }
@@ -131,8 +153,11 @@ function NewStudent({ onDone }: { onDone: () => void }) {
     if (!Object.keys(local).length) void save.run();
   };
   return (
-    <form className="card stack" onSubmit={submit} noValidate>
-      <h2>生徒を登録</h2>
+    <form className="panel" onSubmit={submit} noValidate>
+      <div className="panel-header">
+        <h2>生徒を登録</h2>
+      </div>
+      <div className="panel-body stack">
       <Notice>登録すると、ログインメールに招待メールが届きます。同じメールで登録すると、同じ保護者のお子さま（兄弟）として紐付きます。</Notice>
       {error && <Warning title={error} />}
       <div className="grid-2">
@@ -181,9 +206,15 @@ function NewStudent({ onDone }: { onDone: () => void }) {
           </div>
         )}
       </Loadable>
-      <Button type="submit" pending={save.pending}>
-        登録して招待メールを送る
-      </Button>
+      </div>
+      <div className="panel-footer">
+        <Button variant="secondary" onClick={onDone}>
+          やめる
+        </Button>
+        <Button type="submit" pending={save.pending}>
+          登録して招待メールを送る
+        </Button>
+      </div>
     </form>
   );
 }
@@ -205,10 +236,16 @@ function CsvImport({ onDone }: { onDone: () => void }) {
     }
   });
   return (
-    <div className="card stack">
-      <h2>CSVで一括登録</h2>
-      <p className="small">1行目の見出し: ログインメール,保護者名,生徒名,電話番号,生徒のメール,住所</p>
-      <label className="btn btn-secondary">
+    <div className="panel">
+      <div className="panel-header">
+        <h2>CSVで一括登録</h2>
+      </div>
+      <div className="panel-body stack">
+      <p className="small secondary">
+        1行目の見出し: <code>ログインメール,保護者名,生徒名,電話番号,生徒のメール,住所</code>
+      </p>
+      <label className="btn btn-secondary" style={{ alignSelf: 'flex-start' }}>
+        <IconUpload size={18} />
         ファイルを選ぶ
         <input
           type="file"
@@ -232,9 +269,12 @@ function CsvImport({ onDone }: { onDone: () => void }) {
           </ul>
         </Warning>
       )}
-      <Button onClick={() => void run.run()} pending={run.pending} disabled={!csv.trim()}>
-        登録する
-      </Button>
+      </div>
+      <div className="panel-footer">
+        <Button onClick={() => void run.run()} pending={run.pending} disabled={!csv.trim()}>
+          登録する
+        </Button>
+      </div>
     </div>
   );
 }

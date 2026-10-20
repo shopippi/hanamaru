@@ -56,7 +56,7 @@ async function audit(page: Page) {
       }
     }
     // UI-04: 押せる場所は縦横44px以上（文章の中のリンクは除く）
-    for (const e of document.querySelectorAll('button, .btn, .choice, .tabbar a, .sidenav a, .checkbox, select, input:not([type=checkbox]):not([type=radio]):not([type=file])')) {
+    for (const e of document.querySelectorAll('button, .btn, .choice, .tabbar a, .nav-link, .date-chip, .child-chip, .tabs button, .checkbox, select, input:not([type=checkbox]):not([type=radio]):not([type=file])')) {
       if (!visible(e)) continue;
       const r = e.getBoundingClientRect();
       if (r.width < 44 || r.height < 44) problems.push(`UI-04 ${Math.round(r.width)}x${Math.round(r.height)} ${name(e)}`);
@@ -126,8 +126,9 @@ test('UI-02 強い警告は太い黒枠・警告アイコン・太字', async ({
   const warning = page.locator('.warning').first();
   await expect(warning).toBeVisible();
   const style = await warning.evaluate((e) => ({ border: getComputedStyle(e).borderTopWidth, weight: getComputedStyle(e).fontWeight }));
-  expect(style).toEqual({ border: '3px', weight: '700' });
-  await expect(warning.locator('.notice-icon')).toHaveText('⚠');
+  expect(parseFloat(style.border)).toBeGreaterThanOrEqual(2);
+  expect(style.weight).toBe('700');
+  await expect(warning.locator('.notice-icon svg')).toBeVisible();
   await context.setOffline(false);
 });
 
@@ -242,7 +243,7 @@ test('UI-17 メール・電話は適したキーボードと自動入力に対�
 test('UI-18 日付は「10月20日（火）」、時刻は「15:00」の形', async ({ page }) => {
   await login(page, STUDENT, 'parent@example.test');
   await page.goto(`${STUDENT}/book`);
-  const option = await page.locator('#day option').first().innerText();
+  const option = (await page.locator('.date-chip').first().getAttribute('aria-label'))!;
   expect(option).toMatch(/^\d{1,2}月\d{1,2}日（[日月火水木金土]）/);
   expect(await page.locator('.slot-grid .choice').first().innerText()).toMatch(/^\d{2}:\d{2}$/);
 });

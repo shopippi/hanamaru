@@ -3,11 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ConfirmDialog,
   Empty,
+  IconCalendar,
   Loadable,
   Skeleton,
   Warning,
   addDaysKey,
   dateKey,
+  dateParts,
   fmtDate,
   fmtDateKey,
   fmtTime,
@@ -27,7 +29,11 @@ const RANGE_DAYS = 28;
 function BookSkeleton() {
   return (
     <div className="stack">
-      <div className="skeleton" style={{ height: 44, width: '60%' }} />
+      <div className="date-strip" aria-hidden="true">
+        {Array.from({ length: 6 }, (_, i) => (
+          <div key={i} className="skeleton" style={{ flex: 'none', width: 60, height: 78 }} />
+        ))}
+      </div>
       <div className="slot-grid">
         {Array.from({ length: 8 }, (_, i) => (
           <div key={i} className="skeleton" style={{ height: 52 }} />
@@ -108,19 +114,21 @@ export function Book() {
           return (
             <div className="stack">
               {profiles.length > 1 && (
-                <div className="row" role="group" aria-label="講師を選ぶ">
+                <div className="child-switcher" role="group" aria-label="講師を選ぶ">
                   {profiles.map((p) => (
                     <button
                       key={p.teacherId}
                       type="button"
-                      className="choice"
-                      style={{ width: 'auto' }}
+                      className="child-chip"
                       aria-pressed={p.teacherId === activeTeacher}
                       onClick={() => {
                         setTeacherId(p.teacherId);
                         setDay(null);
                       }}
                     >
+                      <span className="avatar" aria-hidden="true">
+                        {(p.name.trim().split(/\s+/).pop() ?? p.name).slice(0, 1)}
+                      </span>
                       {p.name}
                     </button>
                   ))}
@@ -129,23 +137,42 @@ export function Book() {
               <Loadable state={slotsLoad.state} reload={slotsLoad.reload} skeleton={<BookSkeleton />}>
                 {() =>
                   days.length === 0 ? (
-                    <Empty message="予約できる枠がありません。日を改めてご確認いただくか、教室にお問い合わせください。" />
+                    <Empty
+                      icon={<IconCalendar />}
+                      message="予約できる枠がありません"
+                      text="日を改めてご確認いただくか、教室にお問い合わせください。"
+                    />
                   ) : (
-                    <div className="stack">
+                    <div className="stack-lg">
                       <div>
-                        <label className="field-label" htmlFor="day">
+                        <p className="field-label" id="day-label">
                           日にち
-                        </label>
-                        <select id="day" className="select" value={activeDay ?? ''} onChange={(e) => setDay(e.target.value)}>
-                          {days.map((d) => (
-                            <option key={d} value={d}>
-                              {fmtDateKey(d)}（空き{byDay.get(d)!.length}枠）
-                            </option>
-                          ))}
-                        </select>
+                        </p>
+                        <div className="date-strip" role="group" aria-labelledby="day-label">
+                          {days.map((d) => {
+                            const p = dateParts(`${d}T12:00:00+09:00`);
+                            const n = byDay.get(d)!.length;
+                            return (
+                              <button
+                                key={d}
+                                type="button"
+                                className="date-chip"
+                                aria-pressed={d === activeDay}
+                                aria-label={`${fmtDateKey(d)}（空き${n}枠）`}
+                                onClick={() => setDay(d)}
+                              >
+                                <span className="date-chip-weekday">
+                                  {p.month}/{p.weekday}
+                                </span>
+                                <span className="date-chip-day">{p.day}</span>
+                                <span className="date-chip-count">{n}枠</span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                       <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
-                        <legend className="field-label">時間を選ぶ</legend>
+                        <legend className="field-label">{activeDay && fmtDateKey(activeDay)}の空き時間</legend>
                         <div className="slot-grid">
                           {(byDay.get(activeDay!) ?? []).map((s) => (
                             <button
@@ -176,18 +203,20 @@ export function Book() {
                 onConfirm={() => picked && void book.run(picked)}
               >
                 {picked && (
-                  <dl className="stack" style={{ margin: 0 }}>
+                  <dl className="summary">
                     <div>
-                      <dt className="muted small">日時</dt>
-                      <dd style={{ margin: 0, fontWeight: 700, fontSize: 18 }}>
+                      <dt>日時</dt>
+                      <dd>
                         {fmtDate(picked.startsAt)} {fmtTimeRange(picked.startsAt, picked.endsAt)}
                       </dd>
                     </div>
                     <div>
-                      <dt className="muted small">講師・レッスン</dt>
-                      <dd style={{ margin: 0 }}>
-                        {profiles.find((p) => p.teacherId === picked.teacherId)?.name}・{typeName(picked.lessonTypeId)}
-                      </dd>
+                      <dt>講師</dt>
+                      <dd>{profiles.find((p) => p.teacherId === picked.teacherId)?.name}</dd>
+                    </div>
+                    <div>
+                      <dt>レッスン</dt>
+                      <dd>{typeName(picked.lessonTypeId)}</dd>
                     </div>
                   </dl>
                 )}

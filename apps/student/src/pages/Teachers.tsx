@@ -1,4 +1,4 @@
-import { Empty, Loadable, Skeleton, useLoad } from '@hanamaru/ui';
+import { Empty, IconTeacher, Loadable, Skeleton, useLoad } from '@hanamaru/ui';
 import { api, type TeacherProfile } from '../api.js';
 import { useStudent } from '../student-context.js';
 
@@ -21,34 +21,41 @@ export function Teachers() {
       >
         {(list) =>
           list.length === 0 ? (
-            <Empty message="担当の講師がまだ決まっていません。教室にお問い合わせください。" />
+            <Empty icon={<IconTeacher />} message="担当の講師がまだ決まっていません" text="教室にお問い合わせください。" />
           ) : (
             <div className="stack">
               {list.map((t) => (
-                <article key={t.teacherId} className="card stack">
-                  <div className="row" style={{ gap: 16, alignItems: 'flex-start' }}>
+                <article key={t.teacherId} className="panel profile">
+                  <header className="profile-head">
                     {t.photo ? (
-                      <img src={t.photo} alt="" width={88} height={88} style={{ borderRadius: '50%', objectFit: 'cover', filter: 'grayscale(1)' }} />
+                      <img className="profile-photo" src={t.photo} alt="" width={72} height={72} />
                     ) : (
-                      <div aria-hidden="true" style={{ width: 88, height: 88, borderRadius: '50%', background: 'var(--c-bg-subtle)' }} />
+                      <span className="avatar avatar-lg" aria-hidden="true">
+                        {(t.name.trim().split(/\s+/).pop() ?? t.name).slice(0, 1)}
+                      </span>
                     )}
                     <div>
-                      <h2 style={{ marginBottom: 4 }}>{t.name}</h2>
-                      <p className="muted" style={{ margin: 0 }}>
-                        {t.instruments.join('・')}
-                      </p>
+                      <h2>{t.name}</h2>
+                      {t.instruments.length > 0 && (
+                        <p className="row-tight" style={{ marginTop: 6 }}>
+                          {t.instruments.map((i) => (
+                            <span key={i} className="badge">
+                              {i}
+                            </span>
+                          ))}
+                        </p>
+                      )}
                     </div>
-                  </div>
-                  {t.career && (
-                    <div>
-                      <h3>経歴</h3>
-                      <p>{t.career}</p>
-                    </div>
-                  )}
-                  {t.message && (
-                    <div>
-                      <h3>ひとこと</h3>
-                      <p>{t.message}</p>
+                  </header>
+                  {(t.career || t.message) && (
+                    <div className="panel-body stack">
+                      {t.message && <blockquote className="profile-quote">{t.message}</blockquote>}
+                      {t.career && (
+                        <div>
+                          <h3 className="card-title">経歴</h3>
+                          <p style={{ whiteSpace: 'pre-wrap' }}>{t.career}</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </article>

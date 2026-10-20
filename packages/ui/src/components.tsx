@@ -15,13 +15,15 @@ import {
 import type { LoadState } from './hooks.js';
 import { useOnline } from './hooks.js';
 import { OFFLINE_MESSAGE } from './api.js';
+import { dateParts } from './format.js';
+import { IconAlert, IconCheckCircle, IconChevronLeft, IconInbox, IconInfo, IconWifiOff } from './icons.js';
 
 // 3つのロールで共通の部品（UI-06）
 
 // --- ボタン ---------------------------------------------------------------
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'quiet';
   block?: boolean;
   /** 処理中は押せなくし、処理中の表示を出す（UI-13） */
   pending?: boolean;
@@ -154,25 +156,31 @@ export function LoadError({ message, onRetry }: { message: string; onRetry: () =
   return (
     <div className="notice warning" role="alert">
       <span className="notice-icon" aria-hidden="true">
-        ⚠
+        <IconAlert />
       </span>
-      <div className="notice-body stack">
+      <div className="notice-body stack-sm">
         <p>
           <strong>{message === '読み込めませんでした' ? message : `読み込めませんでした（${message}）`}</strong>
         </p>
-        <Button variant="secondary" onClick={onRetry}>
-          再読み込み
-        </Button>
+        <div>
+          <Button variant="secondary" onClick={onRetry}>
+            再読み込み
+          </Button>
+        </div>
       </div>
     </div>
   );
 }
 
 /** 0件のときは空白にせず、理由と次の操作を出す（UI-12） */
-export function Empty({ message, action }: { message: string; action?: ReactNode }) {
+export function Empty({ message, text, action, icon }: { message: string; text?: ReactNode; action?: ReactNode; icon?: ReactNode }) {
   return (
     <div className="empty">
-      <p>{message}</p>
+      <span className="empty-icon" aria-hidden="true">
+        {icon ?? <IconInbox />}
+      </span>
+      <p className="empty-title">{message}</p>
+      {text && <p className="empty-text">{text}</p>}
       {action}
     </div>
   );
@@ -180,11 +188,11 @@ export function Empty({ message, action }: { message: string; action?: ReactNode
 
 // --- 案内・警告（UI-02） ------------------------------------------------------
 
-export function Notice({ children, icon = 'ℹ' }: { children: ReactNode; icon?: string }) {
+export function Notice({ children, icon }: { children: ReactNode; icon?: ReactNode }) {
   return (
     <div className="notice" role="note">
       <span className="notice-icon" aria-hidden="true">
-        {icon}
+        {icon ?? <IconInfo />}
       </span>
       <div className="notice-body">{children}</div>
     </div>
@@ -192,17 +200,17 @@ export function Notice({ children, icon = 'ℹ' }: { children: ReactNode; icon?:
 }
 
 /** 強い警告。色に頼らず、太い黒枠・警告アイコン・太字で目立たせる */
-export function Warning({ title, children }: { title: string; children?: ReactNode }) {
+export function Warning({ title, children, icon }: { title: string; children?: ReactNode; icon?: ReactNode }) {
   return (
     <div className="notice warning" role="alert">
       <span className="notice-icon" aria-hidden="true">
-        ⚠
+        {icon ?? <IconAlert />}
       </span>
-      <div>
+      <div className="notice-body">
         <p>
           <strong>{title}</strong>
         </p>
-        {children && <div className="notice-body">{children}</div>}
+        {children && <div>{children}</div>}
       </div>
     </div>
   );
@@ -227,7 +235,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind === 'error' ? 'toast-error' : ''}`}>
-            {t.message}
+            {t.kind === 'error' ? <IconAlert size={18} /> : <IconCheckCircle size={18} />}
+            <span>{t.message}</span>
           </div>
         ))}
       </div>
@@ -291,11 +300,130 @@ export function ConfirmDialog({
 export function OfflineBanner() {
   const online = useOnline();
   if (online) return null;
-  return <Warning title={OFFLINE_MESSAGE}>予約やキャンセルは、電波のある場所で開き直してから行ってください。</Warning>;
+  return (
+    <Warning title={OFFLINE_MESSAGE} icon={<IconWifiOff />}>
+      予約やキャンセルは、電波のある場所で開き直してから行ってください。
+    </Warning>
+  );
 }
 
 /** オフラインのときは押せないボタン */
 export function OnlineButton(props: Parameters<typeof Button>[0]) {
   const online = useOnline();
   return <Button {...props} disabled={props.disabled || !online} />;
+}
+
+// --- ページの見出し・区切り --------------------------------------------------------
+
+/** ページの見出し。右側に主な操作を置く */
+export function PageHeader({
+  title,
+  description,
+  actions,
+  back,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  back?: { to: string; label: string; as?: (p: { to: string; className: string; children: ReactNode }) => ReactNode };
+}) {
+  return (
+    <header className="page-header">
+      <div className="page-header-text">
+        {back &&
+          (back.as ? (
+            back.as({ to: back.to, className: 'back', children: <><IconChevronLeft size={16} />{back.label}</> })
+          ) : (
+            <a className="back" href={back.to}>
+              <IconChevronLeft size={16} />
+              {back.label}
+            </a>
+          ))}
+        <h1>{title}</h1>
+        {description && <p>{description}</p>}
+      </div>
+      {actions && <div className="row">{actions}</div>}
+    </header>
+  );
+}
+
+/** 枠で囲んだまとまり。見出しと右側の操作を持てる */
+export function Panel({
+  title,
+  actions,
+  children,
+  flush,
+  footer,
+  id,
+  className,
+}: {
+  title?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+  flush?: boolean;
+  footer?: ReactNode;
+  id?: string;
+  className?: string;
+}) {
+  return (
+    <section className={['panel', className ?? ''].join(' ').trim()} id={id}>
+      {(title || actions) && (
+        <div className="panel-header">
+          {title && <h2>{title}</h2>}
+          {actions && <div className="row">{actions}</div>}
+        </div>
+      )}
+      <div className={flush ? 'panel-body flush' : 'panel-body'}>{children}</div>
+      {footer && <div className="panel-footer">{footer}</div>}
+    </section>
+  );
+}
+
+/** 2〜4個から1つを選ぶ切り替え */
+export function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: readonly (readonly [T, string])[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="segmented" role="group" aria-label={label}>
+      {options.map(([k, text]) => (
+        <button key={k} type="button" aria-pressed={value === k} onClick={() => onChange(k)}>
+          {text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** 数字を大きく見せる枠（ダッシュボード） */
+export function Stat({ label, value, unit, hint }: { label: string; value: ReactNode; unit?: string; hint?: ReactNode }) {
+  return (
+    <>
+      <p className="stat-label">{label}</p>
+      <p className="stat-value num">
+        {value}
+        {unit && <small>{unit}</small>}
+      </p>
+      {hint && <p className="small muted">{hint}</p>}
+    </>
+  );
+}
+
+/** カレンダーの1日の形の日付（読み上げは隣の文字で伝える） */
+export function DateTile({ at }: { at: Date | string }) {
+  const p = dateParts(at);
+  return (
+    <span className="date-tile" aria-hidden="true">
+      <span className="date-tile-month">{p.month}月</span>
+      <span className="date-tile-day">{p.day}</span>
+      <span className="date-tile-weekday">{p.weekday}</span>
+    </span>
+  );
 }

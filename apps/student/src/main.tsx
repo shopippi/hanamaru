@@ -22,13 +22,9 @@ function Login() {
       title="生徒ログイン"
       onLoggedIn={() => navigate(params.get('next') ?? '/', { replace: true })}
       footer={
-        <div className="stack small">
-          <p>
-            <a href="/register">はじめての方（新規登録）</a>
-          </p>
-          <p>
-            <a href="/trial">体験レッスンのお申込</a>
-          </p>
+        <div className="auth-links-more">
+          <a href="/register">はじめての方（新規登録）</a>
+          <a href="/trial">体験レッスンのお申込</a>
         </div>
       }
     />

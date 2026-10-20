@@ -2,11 +2,23 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Empty,
+  IconAlert,
+  IconCalendar,
+  IconCheckCircle,
+  IconChevronLeft,
+  IconChevronRight,
+  IconYen,
   Loadable,
+  PageHeader,
+  Panel,
+  Segmented,
+  Stat,
   STUDENT_STATUS_LABEL,
   Skeleton,
   Warning,
   fmtDate,
+  fmtDateKey,
+  dateKey,
   fmtMonth,
   fmtMonthShort,
   fmtTime,
@@ -59,14 +71,14 @@ export function Dashboard() {
   const { state, reload } = useLoad(() => api.get<Dash>(`/dashboard?month=${month}`), [month]);
 
   return (
-    <div className="stack-lg">
-      <h1>ダッシュボード</h1>
+    <div>
+      <PageHeader title="ダッシュボード" description={`今日は${fmtDateKey(dateKey(new Date()))}です`} />
       <Loadable
         state={state}
         reload={reload}
         skeleton={
-          <div className="stack">
-            <div className="grid">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="skeleton" style={{ height: 88 }} />)}</div>
+          <div className="stack-lg">
+            <div className="stat-grid">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="skeleton" style={{ height: 96 }} />)}</div>
             <Skeleton block />
             <Skeleton block />
           </div>
@@ -91,134 +103,149 @@ export function Dashboard() {
           }
           return (
             <div className="stack-lg">
-              {todos.length > 0 && (
-                <Warning title="対応が必要なこと">
-                  <ul style={{ margin: 0, paddingLeft: '1.2em' }}>
+              {todos.length > 0 ? (
+                <Warning title={`対応が必要なこと（${todos.length}件）`}>
+                  <ul className="todo-list">
                     {todos.map((t, i) => (
                       <li key={i}>{t}</li>
                     ))}
                   </ul>
                 </Warning>
+              ) : (
+                <div className="notice" role="note">
+                  <span className="notice-icon" aria-hidden="true">
+                    <IconCheckCircle />
+                  </span>
+                  <div className="notice-body">対応が必要なことはありません</div>
+                </div>
               )}
 
               <section aria-labelledby="db1">
-                <h2 id="db1">生徒の人数</h2>
-                <div className="grid">
+                <div className="section-title">
+                  <h2 id="db1">生徒の人数</h2>
+                  <Link className="small" to="/students">
+                    生徒の一覧へ
+                  </Link>
+                </div>
+                <div className="stat-grid">
                   {Object.entries(STUDENT_STATUS_LABEL).map(([k, label]) => (
-                    <Link key={k} className="card card-link" to={`/students?status=${k}`}>
-                      <p className="card-title">{label}</p>
-                      <p className="big-number num" style={{ margin: 0 }}>
-                        {d.studentCounts[k] ?? 0}
-                        <small>人</small>
-                      </p>
+                    <Link key={k} className="card card-link stat" to={`/students?status=${k}`}>
+                      <Stat label={label} value={d.studentCounts[k] ?? 0} unit="人" />
                     </Link>
                   ))}
                 </div>
               </section>
 
-              <section aria-labelledby="db2" className="stack">
-                <h2 id="db2">予約</h2>
-                <div className="row">
-                  <div className="row" role="group" aria-label="期間">
-                    <button type="button" className="choice" style={{ width: 'auto' }} aria-pressed={range === 'today'} onClick={() => setRange('today')}>
-                      今日
-                    </button>
-                    <button type="button" className="choice" style={{ width: 'auto' }} aria-pressed={range === 'week'} onClick={() => setRange('week')}>
-                      今週
-                    </button>
-                  </div>
-                  <div className="row" role="group" aria-label="まとめ方">
-                    <button type="button" className="choice" style={{ width: 'auto' }} aria-pressed={groupBy === 'teacher'} onClick={() => setGroupBy('teacher')}>
-                      講師別
-                    </button>
-                    <button type="button" className="choice" style={{ width: 'auto' }} aria-pressed={groupBy === 'room'} onClick={() => setGroupBy('room')}>
-                      教室別
-                    </button>
-                  </div>
-                </div>
-                {list.length === 0 ? (
-                  <Empty message={range === 'today' ? '今日の予約はありません' : '今週の予約はありません'} action={<Link className="btn btn-secondary" to="/calendar">予約を見る</Link>} />
-                ) : (
-                  [...groups].map(([name, rs]) => (
-                    <div key={name} className="card">
-                      <h3>
-                        {name}（{rs.length}件）
-                      </h3>
-                      <ul className="list">
-                        {rs.map((r) => (
-                          <li key={r.id}>
-                            {range === 'week' && `${fmtDate(r.startsAt)} `}
-                            <strong className="num">{fmtTime(r.startsAt)}</strong>　{r.studentName}
-                            <span className="small muted">
-                              ・{r.lessonTypeName}
-                              {groupBy === 'room' ? `・${r.teacherName}` : ''}
+              <div className="dash-grid">
+                <Panel
+                  title="予約"
+                  className="dash-main"
+                  flush
+                  actions={
+                    <>
+                      <Segmented label="期間" value={range} options={[['today', '今日'], ['week', '今週']] as const} onChange={setRange} />
+                      <Segmented label="まとめ方" value={groupBy} options={[['teacher', '講師別'], ['room', '教室別']] as const} onChange={setGroupBy} />
+                    </>
+                  }
+                >
+                  {list.length === 0 ? (
+                    <Empty
+                      icon={<IconCalendar />}
+                      message={range === 'today' ? '今日の予約はありません' : '今週の予約はありません'}
+                      action={
+                        <Link className="btn btn-secondary" to="/calendar">
+                          予約を見る
+                        </Link>
+                      }
+                    />
+                  ) : (
+                    [...groups].map(([name, rs]) => (
+                      <div key={name} className="group">
+                        <h3 className="group-title">
+                          {name}
+                          <span className="badge badge-muted">{rs.length}件</span>
+                        </h3>
+                        <ul className="list">
+                          {rs.map((r) => (
+                            <li key={r.id} className="list-row">
+                              <span className="time-cell num">
+                                {range === 'week' && <span className="small muted">{fmtDate(r.startsAt)}</span>}
+                                <strong>{fmtTime(r.startsAt)}</strong>
+                              </span>
+                              <span className="list-row-main">
+                                <span className="list-title">{r.studentName}</span>
+                                <span className="list-meta">
+                                  {r.lessonTypeName}
+                                  {groupBy === 'room' ? `・${r.teacherName}` : ''}
+                                </span>
+                              </span>
+                              {r.status === 'pending' && <span className="badge badge-strong">仮予約</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))
+                  )}
+                </Panel>
+
+                <Panel title="未払い・決済失敗" flush>
+                  {d.unpaid.length === 0 ? (
+                    <Empty icon={<IconYen />} message="未払いの生徒はいません" />
+                  ) : (
+                    <ul className="list">
+                      {d.unpaid.map((u) => (
+                        <li key={u.paymentId} className="list-row">
+                          <span className="list-row-main">
+                            <Link className="list-title" to={`/students/${u.studentId}`}>
+                              {u.studentName}
+                            </Link>
+                            <span className="list-meta">
+                              {fmtMonthShort(u.month)}・{METHOD_LABEL[u.method]}・<span className="num">{fmtYen(u.amount)}</span>
                             </span>
-                            {r.status === 'pending' && <span className="badge" style={{ marginLeft: 8 }}>仮予約</span>}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))
-                )}
-              </section>
+                          </span>
+                          <span className="stack-sm" style={{ textAlign: 'right' }}>
+                            {u.status === 'failed' ? (
+                              <span className="badge badge-strong">
+                                <IconAlert size={14} />
+                                決済失敗
+                              </span>
+                            ) : (
+                              <span className="badge">未払い</span>
+                            )}
+                            <span className="small muted nowrap">{u.graceDaysLeft > 0 ? `猶予あと${u.graceDaysLeft}日` : <strong>猶予を過ぎています</strong>}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Panel>
+              </div>
 
-              <section aria-labelledby="db3" className="stack">
-                <h2 id="db3">未払い・決済失敗</h2>
-                {d.unpaid.length === 0 ? (
-                  <Empty message="未払いの生徒はいません" />
-                ) : (
-                  <div className="table-wrap">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th scope="col">生徒</th>
-                          <th scope="col">対象月</th>
-                          <th scope="col">方法</th>
-                          <th scope="col">金額</th>
-                          <th scope="col">状態</th>
-                          <th scope="col">猶予の残り</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {d.unpaid.map((u) => (
-                          <tr key={u.paymentId}>
-                            <td>
-                              <Link to={`/students/${u.studentId}`}>{u.studentName}</Link>
-                            </td>
-                            <td>{fmtMonthShort(u.month)}</td>
-                            <td>{METHOD_LABEL[u.method]}</td>
-                            <td className="num">{fmtYen(u.amount)}</td>
-                            <td>{u.status === 'failed' ? <strong>⚠ 決済失敗</strong> : '未払い'}</td>
-                            <td className="num">{u.graceDaysLeft > 0 ? `あと${u.graceDaysLeft}日` : <strong>過ぎています</strong>}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </section>
-
-              <section aria-labelledby="db4" className="stack">
-                <div className="spread">
-                  <h2 id="db4" style={{ margin: 0 }}>
-                    講師別（{fmtMonth(d.teacherStats.month)}）
-                  </h2>
-                  <div className="row">
-                    <button type="button" className="btn btn-secondary" onClick={() => setMonth(shiftMonth(month, -1))} aria-label="前の月">
-                      ←
+              <Panel
+                title={`講師別（${fmtMonth(d.teacherStats.month)}）`}
+                flush
+                actions={
+                  <>
+                    <button type="button" className="btn btn-secondary btn-icon" onClick={() => setMonth(shiftMonth(month, -1))} aria-label="前の月">
+                      <IconChevronLeft />
                     </button>
-                    <button type="button" className="btn btn-secondary" onClick={() => setMonth(shiftMonth(month, 1))} aria-label="次の月">
-                      →
+                    <button type="button" className="btn btn-secondary btn-icon" onClick={() => setMonth(shiftMonth(month, 1))} aria-label="次の月">
+                      <IconChevronRight />
                     </button>
-                  </div>
-                </div>
-                <div className="table-wrap">
+                  </>
+                }
+              >
+                <div className="table-wrap flush">
                   <table className="table">
                     <thead>
                       <tr>
                         <th scope="col">講師</th>
-                        <th scope="col">レッスン数</th>
-                        <th scope="col">講師都合キャンセル</th>
+                        <th scope="col" className="num">
+                          レッスン数
+                        </th>
+                        <th scope="col" className="num">
+                          講師都合キャンセル
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -232,7 +259,7 @@ export function Dashboard() {
                     </tbody>
                   </table>
                 </div>
-              </section>
+              </Panel>
             </div>
           );
         }}

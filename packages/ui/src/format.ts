@@ -45,6 +45,12 @@ export const fmtDateKey = (key: string) => {
 };
 export const WEEKDAY_LABELS = WEEKDAYS;
 
+/** 日付のタイル用に、日本時間の月・日・曜日を分けて返す */
+export const dateParts = (d: Date | string) => {
+  const p = parts(d);
+  return { month: p.m, day: p.d, weekday: WEEKDAYS[p.w]! };
+};
+
 export const STUDENT_STATUS_LABEL: Record<string, string> = {
   trial: '体験',
   enrolling: '入会手続き中',

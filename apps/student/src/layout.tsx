@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Button, OfflineBanner, useAction } from '@hanamaru/ui';
+import { IconCalendarPlus, IconHome, IconList, IconLogout, IconTeacher, LogoMark, OfflineBanner, useAction } from '@hanamaru/ui';
 import { api } from './api.js';
 import { InAppBrowserNotice } from './notices.js';
 import { ChildSwitcher, StudentProvider, useStudent } from './student-context.js';
@@ -11,27 +11,35 @@ function Header() {
     location.assign('/login');
   });
   return (
-    <header className="app-header">
-      <div className="app-header-inner">
-        <a className="app-title" href="/">
-          はなまる音楽教室
+    <header className="appbar">
+      <div className="appbar-inner">
+        <a className="brand" href="/">
+          <LogoMark size={26} />
+          <span>はなまる音楽教室</span>
         </a>
-        <span className="small muted" aria-label="表示中の生徒">
+        <span className="appbar-student" aria-label="表示中の生徒">
           {current.name}
         </span>
-        <Button variant="ghost" onClick={() => void logout.run()} pending={logout.pending} pendingLabel="…">
-          ログアウト
-        </Button>
+        <button
+          type="button"
+          className="btn btn-ghost btn-icon"
+          aria-label="ログアウト"
+          title="ログアウト"
+          onClick={() => void logout.run()}
+          disabled={logout.pending}
+        >
+          <IconLogout />
+        </button>
       </div>
     </header>
   );
 }
 
 const TABS = [
-  { to: '/', label: 'ホーム', end: true },
-  { to: '/book', label: '予約する', end: false },
-  { to: '/reservations', label: '予約一覧', end: false },
-  { to: '/teachers', label: '講師', end: false },
+  { to: '/', label: 'ホーム', icon: IconHome, end: true },
+  { to: '/book', label: '予約する', icon: IconCalendarPlus, end: false },
+  { to: '/reservations', label: '予約一覧', icon: IconList, end: false },
+  { to: '/teachers', label: '講師', icon: IconTeacher, end: false },
 ];
 
 export function Layout() {
@@ -49,10 +57,11 @@ export function Layout() {
         </main>
         <nav className="tabbar" aria-label="メインメニュー">
           <ul>
-            {TABS.map((t) => (
-              <li key={t.to}>
-                <NavLink to={t.to} end={t.end}>
-                  {t.label}
+            {TABS.map(({ to, label, icon: Icon, end }) => (
+              <li key={to}>
+                <NavLink to={to} end={end}>
+                  <Icon size={22} />
+                  {label}
                 </NavLink>
               </li>
             ))}
