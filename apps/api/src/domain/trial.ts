@@ -185,6 +185,8 @@ export async function bookPublicTrial(
     const slot = await findSlot(tx, slotInput, true);
     if (!slot) throw ruleViolation('この枠は予約できません。ほかの時間を選んでください');
     await tx.select({ id: teachers.id }).from(teachers).where(eq(teachers.id, slot.teacherId)).for('update');
+    // 同じ部屋を使う別の講師の予約とも順番に処理する
+    if (slot.roomId) await tx.select({ id: rooms.id }).from(rooms).where(eq(rooms.id, slot.roomId)).for('update');
     const again = await findSlot(tx, slotInput, true);
     if (!again) throw ruleViolation('この枠は先に予約されました。ほかの時間を選んでください');
     const [req] = await tx

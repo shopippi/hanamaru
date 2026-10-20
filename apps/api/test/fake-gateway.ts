@@ -12,7 +12,19 @@ export class FakeGateway implements PaymentGateway {
   customers: { id: string; studentId: string }[] = [];
   checkouts: (CheckoutRequest & { id: string; url: string })[] = [];
   prices: { id: string; amount: number }[] = [];
-  subscriptions: { id: string; customerId: string; priceId: string; startAt: Date; cancelAtPeriodEnd: boolean; paymentMethodId: string | null }[] = [];
+  subscriptions: {
+    id: string;
+    customerId: string;
+    priceId: string;
+    startAt: Date;
+    cancelAtPeriodEnd: boolean;
+    paymentMethodId: string | null;
+    studentId?: string;
+    ended?: boolean;
+  }[] = [];
+  voided: string[] = [];
+  /** true にすると、次の Stripe の呼び出しを1回だけ失敗させる */
+  failNext = false;
   checkoutStatuses = new Map<string, CheckoutStatus>();
   invoices = new Map<string, InvoiceStatus>();
 
@@ -24,7 +36,14 @@ export class FakeGateway implements PaymentGateway {
     this.customers.push({ id, studentId: input.studentId });
     return id;
   }
+  private maybeFail() {
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error('stripe is unavailable');
+    }
+  }
   async createCheckout(req: CheckoutRequest) {
+    this.maybeFail();
     const id = this.next('cs');
     const url = `https://checkout.stripe.test/${id}`;
     this.checkouts.push({ ...req, id, url });
@@ -35,7 +54,8 @@ export class FakeGateway implements PaymentGateway {
     this.prices.push({ id, amount: input.amount });
     return id;
   }
-  async createSubscription(input: { customerId: string; priceId: string; startAt: Date; paymentMethodId: string | null }) {
+  async createSubscription(input: { customerId: string; priceId: string; startAt: Date; paymentMethodId: string | null; studentId: string }) {
+    this.maybeFail();
     const id = this.next('sub');
     this.subscriptions.push({ id, ...input, cancelAtPeriodEnd: false });
     return id;
@@ -46,14 +66,24 @@ export class FakeGateway implements PaymentGateway {
   async cancelSubscriptionAtPeriodEnd(subscriptionId: string) {
     this.subscriptions.find((s) => s.id === subscriptionId)!.cancelAtPeriodEnd = true;
   }
+  async resumeSubscription(subscriptionId: string) {
+    this.subscriptions.find((s) => s.id === subscriptionId)!.cancelAtPeriodEnd = false;
+  }
+  async findLiveSubscription(customerId: string, studentId: string) {
+    return this.subscriptions.find((s) => s.customerId === customerId && s.studentId === studentId && !s.cancelAtPeriodEnd && !s.ended)?.id ?? null;
+  }
+  async voidInvoice(invoiceId: string) {
+    this.voided.push(invoiceId);
+  }
   async billingPortalUrl(customerId: string) {
     return `https://billing.stripe.test/${customerId}`;
   }
   async checkoutStatus(sessionId: string) {
     return this.checkoutStatuses.get(sessionId) ?? { status: 'open' as const, paymentMethodId: null };
   }
-  async findSubscriptionInvoice(subscriptionId: string, periodStart: Date) {
-    return this.invoices.get(`${subscriptionId}:${periodStart.toISOString()}`) ?? null;
+  /** invoices のキーは `${subscriptionId}:${month}` */
+  async findSubscriptionInvoice(subscriptionId: string, month: string) {
+    return this.invoices.get(`${subscriptionId}:${month}`) ?? null;
   }
   /** テストでは本文に PaymentEvent の JSON をそのまま入れ、署名は "valid" だけを通す */
   async parseWebhook(rawBody: string, signature: string): Promise<PaymentEvent | null> {

@@ -68,6 +68,28 @@ export function startOfMonth(month: Month): Date {
   return jst(`${month}-01`);
 }
 
+/**
+ * 月額の自動課金の基準時刻（Stripe の課金日）。その月の1日 9:00（日本時間）= 1日 0:00（UTC）。
+ * Stripe は基準時刻の UTC の日付で毎月の課金日を決めるため、日本時間の1日 0:00（UTC では前月末）を
+ * 基準にすると、30日・28日始まりの月で課金日が前月末にずれる。UTC でも1日になる時刻にする。
+ */
+export function billingAnchor(month: Month): Date {
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  return new Date(Date.UTC(y, m - 1, 1));
+}
+
+/**
+ * Stripe の請求期間の開始から、どの月の月謝かを求める。
+ * 課金日が前後に数日ずれても、いちばん近い月の1日（日本時間）の月とする。
+ */
+export function billingMonthOf(periodStart: Date): Month {
+  const m = monthOf(periodStart);
+  const next = addMonths(m, 1);
+  const toThis = Math.abs(periodStart.getTime() - startOfMonth(m).getTime());
+  const toNext = Math.abs(startOfMonth(next).getTime() - periodStart.getTime());
+  return toNext < toThis ? next : m;
+}
+
 export function minutesOf(t: TimeStr): number {
   const [h, m] = t.split(':').map(Number) as [number, number];
   return h * 60 + m;

@@ -128,7 +128,8 @@ describe('AU-06 管理者の二段階認証', () => {
     expect((await b.post('/auth/mfa/verify', { code: totpCode(secret, f.clock.now) })).status).toBe(200);
     expect((await b.get('/students')).status).toBe(200);
 
-    // 2回目以降は確認コードの入力を求める
+    // 2回目以降は確認コードの入力を求める（一度使ったコードは使えないので、次の30秒のコードで）
+    f.clock.now = new Date(f.clock.now.getTime() + 30_000);
     const again = f.browser('manage');
     expect((await again.login(f.adminAccount.email)).data.mfa).toBe('verify');
     expect((await again.get('/students')).status).toBe(401);

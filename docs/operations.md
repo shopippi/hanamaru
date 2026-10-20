@@ -34,7 +34,8 @@
    - ポリシーは「Emails が松田さん・作成者のアドレス」の Allow だけにする（50人まで無料）
    - Stripe の通知は `student.hanamarumusic.com/api/stripe/webhook` で受けるため、Access の影響を受けない
 4. **WAF のレート制限（NF-03）**: Security → WAF → Rate limiting rules に次の2つを足す
-   - 対象のパス: `/api/auth/login`、`/api/auth/password-reset`、`/api/registration`、`/api/trial/`、`/api/students/*/enrollment`
+   - 対象のパス（ポータルごとに `/api/student`・`/api/staff`・`/api/manage` の下にある）: `/api/*/auth/login`、`/api/*/auth/password-reset`、`/api/manage/auth/mfa/verify`、`/api/student/registration`、`/api/student/trial/`、`/api/student/students/*/enrollment`
+     - 式の例: `http.request.method eq "POST" and (http.request.uri.path contains "/auth/" or starts_with(http.request.uri.path, "/api/student/registration") or starts_with(http.request.uri.path, "/api/student/trial/") or ends_with(http.request.uri.path, "/enrollment"))`
      - 同じ IP から 10秒に5回を超えたら 10分ブロックする
    - 対象のパス: `/api/`
      - 同じ IP から 10秒に60回を超えたら 1分ブロックする

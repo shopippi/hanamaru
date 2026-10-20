@@ -91,13 +91,19 @@ export function totpCode(secret: string, at: Date, step = 30): string {
 
 /** 前後30秒のずれまで許す */
 export function verifyTotp(secret: string, code: string, at: Date): boolean {
+  return totpStep(secret, code, at) !== null;
+}
+
+/** 確認コードが合っていれば、その時間の区切り（30秒ごとの通し番号）を返す。同じコードの使い回しを防ぐのに使う */
+export function totpStep(secret: string, code: string, at: Date): number | null {
   const c = code.replace(/\s/g, '');
-  if (!/^\d{6}$/.test(c)) return false;
+  if (!/^\d{6}$/.test(c)) return null;
   for (const drift of [-1, 0, 1]) {
-    const expected = totpCode(secret, new Date(at.getTime() + drift * 30_000));
-    if (timingSafeEqual(Buffer.from(expected), Buffer.from(c))) return true;
+    const t = new Date(at.getTime() + drift * 30_000);
+    const expected = totpCode(secret, t);
+    if (timingSafeEqual(Buffer.from(expected), Buffer.from(c))) return Math.floor(t.getTime() / 1000 / 30);
   }
-  return false;
+  return null;
 }
 
 export function totpUri(secret: string, accountName: string, issuer = 'はなまる音楽教室'): string {

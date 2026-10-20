@@ -13,7 +13,7 @@ import {
 import { addMonths, dateOf, jst, minutesOf, startOfMonth, type Month } from '../lib/time.js';
 import { assertAdmin, assertTeacherSelfOrAdmin } from './access.js';
 import { audit } from './audit.js';
-import { isCoveredByAvailability } from './availability.js';
+import { availabilityChecker } from './availability.js';
 import { cancelForCause, sendNotices, type Reservation } from './booking.js';
 import type { Actor, Ctx } from './context.js';
 import { invalid } from './errors.js';
@@ -85,11 +85,10 @@ async function affectedReservations(db: Db, teacherId: string, now: Date): Promi
       ),
     )
     .orderBy(asc(reservations.startsAt));
-  const out: Reservation[] = [];
-  for (const r of future) {
-    if (!(await isCoveredByAvailability(db, r, dateOf(r.startsAt)))) out.push(r);
-  }
-  return out;
+  if (future.length === 0) return [];
+  // 空き時間は期間の分をまとめて1回だけ読む（講師のロック中に何度も読まない）
+  const isCovered = await availabilityChecker(db, teacherId, dateOf(future[0]!.startsAt), dateOf(future.at(-1)!.startsAt));
+  return future.filter((r) => !isCovered(r, dateOf(r.startsAt)));
 }
 
 async function toAffected(db: Db, list: Reservation[]): Promise<AffectedReservation[]> {
@@ -187,8 +186,11 @@ export async function createClosure(ctx: Ctx, actor: Actor, raw: unknown) {
   const parsed = closureInput.safeParse(raw);
   if (!parsed.success) throw invalid(parsed.error.issues[0]?.message ?? '入力に誤りがあります');
   const c = parsed.data;
+  const now = ctx.now();
+  if (c.date < dateOf(now)) throw invalid('過ぎた日は休講にできません');
   const from = jst(c.date, c.startTime ?? '00:00');
   const to = c.endTime ? jst(c.date, c.endTime) : new Date(jst(c.date).getTime() + 24 * 3600 * 1000);
+  if (to <= now) throw invalid('過ぎた時間は休講にできません');
   const result = await ctx.db.transaction(async (tx) => {
     const [row] = await tx.insert(closures).values({ ...c, createdBy: actor.kind === 'account' ? actor.accountId : null }).returning();
     const hit = await tx
@@ -199,10 +201,12 @@ export async function createClosure(ctx: Ctx, actor: Actor, raw: unknown) {
           inArray(reservations.status, ['pending', 'confirmed']),
           lt(reservations.startsAt, to),
           gte(reservations.endsAt, from),
+          // 始まったレッスンは取り消さない（受講済みの回数を戻さない）
+          gte(reservations.startsAt, now),
         ),
       );
     const overlapping = hit.filter((r) => r.startsAt < to && from < r.endsAt);
-    const notices = await cancelForCause(tx, overlapping, 'school', actor, ctx.now());
+    const notices = await cancelForCause(tx, overlapping, 'school', actor, now);
     await audit(tx, actor, 'closure.create', 'closure', row!.id, { ...c, cancelled: overlapping.map((r) => r.id) });
     return { closure: row!, cancelled: overlapping.length, notices };
   });

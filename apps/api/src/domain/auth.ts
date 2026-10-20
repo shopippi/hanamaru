@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { accounts, authTokens, sessions, students } from '../db/schema.js';
 import {
@@ -6,9 +6,9 @@ import {
   newToken,
   newTotpSecret,
   sha256,
+  totpStep,
   totpUri,
   verifyPassword,
-  verifyTotp,
 } from '../lib/crypto.js';
 import { DAY_MS } from '../lib/time.js';
 import type { Ctx, Role } from './context.js';
@@ -62,19 +62,14 @@ export async function login(ctx: Ctx, portal: Role, email: string, password: str
     await verifyPassword(password, DUMMY_HASH);
     throw unauthorized(LOGIN_FAILED);
   }
+  if (account.role !== portal) {
+    // ほかのポータルのアカウントは、失敗として数えない。公開の生徒の画面から管理者をロックさせないため（AU-01、AU-05）
+    await verifyPassword(password, DUMMY_HASH);
+    throw unauthorized(LOGIN_FAILED);
+  }
   if (account.lockedUntil && account.lockedUntil > now) throw unauthorized(LOCKED);
-  const ok = (await verifyPassword(password, account.passwordHash)) && account.role === portal;
-  if (!ok) {
-    const failed = account.failedLoginCount + 1;
-    const lock = failed >= settings.maxFailedLogins;
-    await ctx.db
-      .update(accounts)
-      .set({
-        failedLoginCount: lock ? 0 : failed,
-        lockedUntil: lock ? new Date(now.getTime() + settings.lockMinutes * 60_000) : account.lockedUntil,
-      })
-      .where(eq(accounts.id, account.id));
-    throw unauthorized(lock ? LOCKED : LOGIN_FAILED);
+  if (!(await verifyPassword(password, account.passwordHash))) {
+    throw unauthorized((await countFailure(ctx, account.id, 'password')) ? LOCKED : LOGIN_FAILED);
   }
   if (account.role === 'student' && (await allStudentsWithdrawn(ctx.db, account.id))) {
     throw unauthorized('退会済みのためログインできません。教室にお問い合わせください');
@@ -87,6 +82,26 @@ export async function login(ctx: Ctx, portal: Role, email: string, password: str
   const expiresAt = new Date(now.getTime() + (mfa === 'none' ? settings.sessionDays * DAY_MS : 10 * 60_000));
   await ctx.db.insert(sessions).values({ id: sha256(token), accountId: account.id, expiresAt, mfaPending: mfa !== 'none' });
   return { token, account, mfa, expiresAt };
+}
+
+/**
+ * 失敗を1回数え、上限に達したら一時的にロックする（AU-05）。ロックしたら true。
+ * 同時に失敗しても数え漏れがないよう、データベースの上で足す
+ */
+async function countFailure(ctx: Ctx, accountId: string, kind: 'password' | 'totp'): Promise<boolean> {
+  const settings = await getSettings(ctx.db);
+  const column = kind === 'password' ? accounts.failedLoginCount : accounts.failedTotpCount;
+  const [row] = await ctx.db
+    .update(accounts)
+    .set(kind === 'password' ? { failedLoginCount: sql`${column} + 1` } : { failedTotpCount: sql`${column} + 1` })
+    .where(eq(accounts.id, accountId))
+    .returning({ failed: column });
+  if (!row || row.failed < settings.maxFailedLogins) return false;
+  await ctx.db
+    .update(accounts)
+    .set({ failedLoginCount: 0, failedTotpCount: 0, lockedUntil: new Date(ctx.now().getTime() + settings.lockMinutes * 60_000) })
+    .where(eq(accounts.id, accountId));
+  return true;
 }
 
 const DUMMY_HASH =
@@ -131,12 +146,31 @@ export async function startMfaSetup(ctx: Ctx, auth: Authenticated): Promise<{ se
   return { secret, uri: totpUri(secret, auth.account.email) };
 }
 
-/** 認証アプリに表示された6桁で、登録または2段階目の確認をする（AU-06） */
+/**
+ * 認証アプリに表示された6桁で、登録または2段階目の確認をする（AU-06）。
+ * 失敗はパスワードと同じ上限でロックし、ロックしたら確認待ちのログインも切る（AU-05）。
+ * 一度使ったコードは使えない
+ */
 export async function verifyMfa(ctx: Ctx, auth: Authenticated, code: string): Promise<Date> {
+  const now = ctx.now();
   const [account] = await ctx.db.select().from(accounts).where(eq(accounts.id, auth.account.id));
   if (!account?.totpSecret) throw invalid('先に認証アプリを登録してください');
-  if (!verifyTotp(account.totpSecret, code, ctx.now())) throw unauthorized('確認コードが正しくありません');
-  if (!account.totpEnabled) await ctx.db.update(accounts).set({ totpEnabled: true }).where(eq(accounts.id, account.id));
+  if (account.lockedUntil && account.lockedUntil > now) throw unauthorized(LOCKED);
+  const step = totpStep(account.totpSecret, code, now);
+  if (step === null || (account.totpLastStep !== null && step <= account.totpLastStep)) {
+    if (await countFailure(ctx, account.id, 'totp')) {
+      await ctx.db.delete(sessions).where(and(eq(sessions.accountId, account.id), eq(sessions.mfaPending, true)));
+      throw unauthorized(LOCKED);
+    }
+    throw unauthorized('確認コードが正しくありません');
+  }
+  // 同時に同じコードが送られても、使えるのは1回だけ
+  const used = await ctx.db
+    .update(accounts)
+    .set({ totpLastStep: step, failedTotpCount: 0, totpEnabled: true })
+    .where(and(eq(accounts.id, account.id), sql`(${accounts.totpLastStep} is null or ${accounts.totpLastStep} < ${step})`))
+    .returning({ id: accounts.id });
+  if (used.length === 0) throw unauthorized('確認コードが正しくありません');
   return completeMfa(ctx, auth.session);
 }
 
@@ -225,10 +259,16 @@ export async function setPasswordWithToken(ctx: Ctx, token: string, password: st
   return account!;
 }
 
+/** パスワードの変更。ほかの端末のログインと、使っていない再設定リンクは無効にする */
 export async function changePassword(ctx: Ctx, auth: Authenticated, current: string, next: string): Promise<void> {
   validatePassword(next);
   if (!auth.account.passwordHash || !(await verifyPassword(current, auth.account.passwordHash))) {
     throw invalid('現在のパスワードが正しくありません');
   }
   await ctx.db.update(accounts).set({ passwordHash: await hashPassword(next) }).where(eq(accounts.id, auth.account.id));
+  await ctx.db.delete(sessions).where(and(eq(sessions.accountId, auth.account.id), ne(sessions.id, auth.session.id)));
+  await ctx.db
+    .update(authTokens)
+    .set({ usedAt: ctx.now() })
+    .where(and(eq(authTokens.accountId, auth.account.id), isNull(authTokens.usedAt)));
 }

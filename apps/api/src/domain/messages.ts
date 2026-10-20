@@ -36,6 +36,14 @@ export const messages = {
       `\n\n回数: ${refunded ? '1回お戻ししました' : '締切後のため戻りません'}` +
       SIGNATURE,
   }),
+  trialCancelled: (r: R, reason: string): Message => ({
+    subject: '【予約キャンセル】体験レッスンの予約を取り消しました',
+    body:
+      `${r.studentName} 様\n\n次の体験レッスンの予約を取り消しました（${reason}）。\n` +
+      `ご迷惑をおかけし申し訳ありません。日程の調整は教室からご連絡します。\n\n` +
+      lesson(r) +
+      SIGNATURE,
+  }),
   reservationReminder: (r: R): Message => ({
     subject: '【明日のレッスン】ご予約のお知らせ',
     body: '明日のレッスンのお知らせです。\n\n' + lesson(r) + SIGNATURE,
