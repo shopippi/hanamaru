@@ -52,10 +52,19 @@ export const settingsSchema = z.object({
   /** パスワード再設定リンクの有効時間（AU-03）と、招待リンクの有効日数（ST-01） */
   resetTokenMinutes: z.number().int().min(5).max(24 * 60),
   inviteTokenDays: z.number().int().min(1).max(30),
+  /** 前日リマインドを送る時刻（時）（NT-01） */
+  reminderHour: z.number().int().min(0).max(23),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
 export type SettingKey = keyof Settings;
+export type SettingsPatch = Partial<Omit<Settings, 'notifications'>> & { notifications?: Partial<Settings['notifications']> };
+
+/** 画面から受け取る設定の変更。通知の種類は一部だけでもよい */
+export const settingsPatchSchema = settingsSchema
+  .omit({ notifications: true })
+  .partial()
+  .extend({ notifications: z.partialRecord(z.enum(NOTIFICATION_TYPES), z.boolean()).optional() });
 
 export const DEFAULT_SETTINGS: Settings = {
   businessHours: [
@@ -84,6 +93,7 @@ export const DEFAULT_SETTINGS: Settings = {
   lockMinutes: 15,
   resetTokenMinutes: 60,
   inviteTokenDays: 7,
+  reminderHour: 9,
 };
 
 export async function getSettings(db: Db): Promise<Settings> {
@@ -99,9 +109,12 @@ export async function getSettings(db: Db): Promise<Settings> {
 }
 
 /** 設定を部分的に更新する。検証に通らない値は例外 */
-export async function updateSettings(db: Db, patch: Partial<Settings>, actorAccountId: string | null): Promise<Settings> {
+export async function updateSettings(db: Db, patch: SettingsPatch, actorAccountId: string | null): Promise<Settings> {
   const current = await getSettings(db);
-  const next = settingsSchema.parse({ ...current, ...patch });
+  const merged = { ...current, ...patch };
+  // 通知の種類は、指定したものだけを変える
+  if (patch.notifications) merged.notifications = { ...current.notifications, ...patch.notifications };
+  const next = settingsSchema.parse(merged);
   for (const key of Object.keys(patch) as SettingKey[]) {
     const value = next[key];
     await db

@@ -1,5 +1,6 @@
 import type { Db } from '../db/client.js';
 import type { Notifier } from './notify.js';
+import type { PaymentGateway } from './payment-gateway.js';
 
 export type Role = 'student' | 'teacher' | 'admin';
 
@@ -17,6 +18,8 @@ export interface Ctx {
   db: Db;
   now: () => Date;
   notifier: Notifier;
+  /** 決済（Stripe）。テストでは偽物に差し替える */
+  payments: PaymentGateway;
   urls: PortalUrls;
 }
 

@@ -14,16 +14,21 @@ import type { Actor, Ctx } from '../src/domain/context.js';
 import { EmailChannel, MemoryEmailTransport, NotificationService } from '../src/domain/notify.js';
 import { jst, monthOf, type Month } from '../src/lib/time.js';
 import { testDb } from './db.js';
+import { FakeGateway } from './fake-gateway.js';
 
 /** 時計を進められるテスト用の環境。既定の「今」は 2026年10月20日（火）10:00 */
 export async function setup(now = jst('2026-10-20', '10:00')) {
   const db: Db = await testDb();
   const mail = new MemoryEmailTransport();
   const clock = { now };
+  const gateway = new FakeGateway();
+  // fixtures の自動課金の生徒が共有する仮のサブスクリプション
+  gateway.subscriptions.push({ id: 'sub_test', customerId: 'cus_test', priceId: 'price_test', startAt: now, cancelAtPeriodEnd: false, paymentMethodId: null });
   const ctx: Ctx = {
     db,
     now: () => clock.now,
     notifier: new NotificationService(db, [new EmailChannel(mail)]),
+    payments: gateway,
     urls: {
       student: 'https://student.example.test',
       staff: 'https://staff.example.test',
@@ -122,6 +127,7 @@ export async function setup(now = jst('2026-10-20', '10:00')) {
     db,
     ctx,
     mail,
+    gateway,
     clock,
     admin,
     adminAccount,

@@ -1,3 +1,4 @@
+import { handlePaymentEvent } from '../domain/billing.js';
 import { createBaseApp, type AppDeps } from './app.js';
 import { manageRoutes } from './manage-routes.js';
 import { staffRoutes } from './staff-routes.js';
@@ -14,5 +15,19 @@ export function createApp(deps: AppDeps) {
   app.route('/api/student', studentRoutes(deps));
   app.route('/api/staff', staffRoutes(deps));
   app.route('/api/manage', manageRoutes(deps));
+
+  // Stripe の通知（PY-05）。署名を確かめてから処理する。処理に失敗したら 500 を返して再送させる
+  app.post('/api/stripe/webhook', async (c) => {
+    const raw = await c.req.text();
+    let event;
+    try {
+      event = await deps.ctx.payments.parseWebhook(raw, c.req.header('stripe-signature') ?? '');
+    } catch {
+      return c.json({ error: 'invalid signature' }, 400);
+    }
+    if (!event) return c.json({ received: true, handled: false });
+    const result = await handlePaymentEvent(deps.ctx, event);
+    return c.json({ received: true, result });
+  });
   return app;
 }
