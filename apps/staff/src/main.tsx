@@ -7,6 +7,7 @@ import { api } from './api.js';
 import { Layout } from './layout.js';
 import { Availability } from './pages/Availability.js';
 import { Lessons } from './pages/Lessons.js';
+import { Profile } from './pages/Profile.js';
 import { Record } from './pages/Record.js';
 import { Reviews } from './pages/Reviews.js';
 import { StudentPage, Students } from './pages/Students.js';
@@ -37,6 +38,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/students" element={<Students />} />
             <Route path="/students/:id" element={<StudentPage />} />
             <Route path="/availability" element={<Availability />} />
+            <Route path="/profile" element={<Profile />} />
           </Route>
         </Routes>
       </ToastProvider>

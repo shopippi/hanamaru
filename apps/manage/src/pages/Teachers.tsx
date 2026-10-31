@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   AvailabilityEditor,
   Button,
@@ -8,9 +8,14 @@ import {
   IconPlus,
   IconTeacher,
   Loadable,
+  IconChevronRight,
+  IconUser,
   Notice,
   PageHeader,
   Panel,
+  ProfileEditor,
+  type PhotoUpload,
+  type TeacherProfileData,
   Skeleton,
   TextField,
   Warning,
@@ -33,17 +38,17 @@ export function Teachers() {
   const toast = useToast();
   const { state, reload } = useLoad(() => api.get<Teacher[]>('/teachers'), []);
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', profileSlug: '' });
+  const navigate = useNavigate();
+  const [form, setForm] = useState({ name: '', email: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const add = useAction(async () => {
     setError(null);
     try {
-      await api.post('/teachers', form);
+      const t = await api.post<{ id: string }>('/teachers', form);
       toast('講師を登録し、招待メールを送りました');
-      setAdding(false);
-      setForm({ name: '', email: '', profileSlug: '' });
-      reload();
+      // 続けてプロフィール・空き時間・担当生徒を入れてもらう
+      navigate(`/teachers/${t.id}?new=1`);
     } catch (e) {
       setErrors(fieldErrors(e));
       setError(e instanceof Error ? e.message : '登録できませんでした');
@@ -58,7 +63,7 @@ export function Teachers() {
     <div>
       <PageHeader
         title="講師"
-        description="講師のアカウントと、講師ごとの空き時間を管理します。"
+        description="講師のアカウント、プロフィール（写真・担当の楽器・経歴）、空き時間を管理します。"
         actions={
           <Button onClick={() => setAdding(!adding)} aria-expanded={adding}>
             <IconPlus size={18} />
@@ -87,13 +92,7 @@ export function Teachers() {
                 <TextField label="名前" value={form.name} error={errors.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
                 <TextField label="メールアドレス" type="email" inputMode="email" value={form.email} error={errors.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
-              <TextField
-                label="プロフィールのキー"
-                hint="講師プロフィールのデータファイルの slug（英小文字・数字・ハイフン）"
-                value={form.profileSlug}
-                error={errors.profileSlug}
-                onChange={(e) => setForm({ ...form, profileSlug: e.target.value })}
-              />
+              <p className="small secondary">登録すると、講師に招待メールが届きます。続けてプロフィールと空き時間を入れます。</p>
             </div>
           </Panel>
         )}
@@ -112,12 +111,20 @@ export function Teachers() {
                         {(t.name.trim().split(/\s+/).pop() ?? t.name).slice(0, 1)}
                       </span>
                       <span className="list-row-main">
-                        <span className="list-title">
-                          {t.name} {!t.active && <span className="badge badge-strong">停止中</span>}
+                        <Link className="list-title" to={`/teachers/${t.id}`}>
+                          {t.name}
+                        </Link>{' '}
+                        {!t.active && <span className="badge badge-strong">停止中</span>}
+                        <span className="list-meta">
+                          {t.instruments.length > 0 ? `${t.instruments.join('・')}　` : ''}
+                          {t.email}
                         </span>
-                        <span className="list-meta">{t.email}</span>
                       </span>
                       <span className="row">
+                        <Link className="btn btn-secondary" to={`/teachers/${t.id}`}>
+                          <IconUser size={18} />
+                          プロフィール
+                        </Link>
                         <Link className="btn btn-secondary" to={`/teachers/${t.id}/availability`}>
                           <IconClock size={18} />
                           空き時間
@@ -175,6 +182,79 @@ export function TeacherAvailability() {
           </div>
         </div>
       )}
+    </Loadable>
+  );
+}
+
+/** 講師の詳細: プロフィールと写真（TC-06）。登録した直後は「次にすること」を出す */
+export function TeacherDetail() {
+  const { id } = useParams();
+  const [params] = useSearchParams();
+  const isNew = params.get('new') === '1';
+  const { state, reload } = useLoad(() => api.get<Teacher[]>('/teachers'), []);
+  return (
+    <Loadable state={state} reload={reload} skeleton={<Skeleton lines={8} />}>
+      {(teachers) => {
+        const t = teachers.find((x) => x.id === id);
+        if (!t) return <Empty icon={<IconTeacher />} message="講師が見つかりません" />;
+        return (
+          <div>
+            <PageHeader
+              title={t.name}
+              description={t.email}
+              back={{
+                to: '/teachers',
+                label: '講師の一覧',
+                as: ({ to, className, children }) => (
+                  <Link to={to} className={className}>
+                    {children}
+                  </Link>
+                ),
+              }}
+              actions={
+                <Link className="btn btn-secondary" to={`/teachers/${t.id}/availability`}>
+                  <IconClock size={18} />
+                  空き時間
+                </Link>
+              }
+            />
+            <div className="stack-lg">
+              {isNew && (
+                <Panel title="次にすること">
+                  <p className="small secondary">招待メールを送りました。講師がメールのリンクからパスワードを決めると、講師の画面にログインできます。</p>
+                  <ol className="checklist">
+                    <li>
+                      <span className="grow">プロフィール（写真・担当の楽器・ひとこと・経歴）を入れる</span>
+                      <span className="small muted">この下で入力</span>
+                    </li>
+                    <li>
+                      <span className="grow">空き時間を入れる（講師本人も講師の画面で入れられます）</span>
+                      <Link className="btn btn-quiet" to={`/teachers/${t.id}/availability`}>
+                        空き時間へ
+                        <IconChevronRight size={16} />
+                      </Link>
+                    </li>
+                    <li>
+                      <span className="grow">担当する生徒を決める（生徒の詳細の「担当講師」で選びます）</span>
+                      <Link className="btn btn-quiet" to="/students">
+                        生徒の一覧へ
+                        <IconChevronRight size={16} />
+                      </Link>
+                    </li>
+                  </ol>
+                </Panel>
+              )}
+              <ProfileEditor
+                description="生徒の画面の「講師」とホームに表示します。講師本人も講師の画面から編集できます。"
+                load={() => api.get<TeacherProfileData>(`/teachers/${t.id}/profile`)}
+                save={(input) => api.put<TeacherProfileData>(`/teachers/${t.id}/profile`, input)}
+                savePhoto={(upload: PhotoUpload) => api.put<TeacherProfileData>(`/teachers/${t.id}/photo`, upload)}
+                deletePhoto={() => api.del(`/teachers/${t.id}/photo`)}
+              />
+            </div>
+          </div>
+        );
+      }}
     </Loadable>
   );
 }

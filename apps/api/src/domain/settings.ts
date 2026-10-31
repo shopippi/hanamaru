@@ -67,6 +67,8 @@ export const settingsSchema = z.object({
   reminderHour: z.number().int().min(0).max(23),
   /** レビュー1件の文字数の上限（RV-01） */
   reviewMaxLength: z.number().int().min(50).max(10000),
+  /** 講師の写真の大きさの上限（KB）（TC-06）。画面で縮めてから送るので、ふつうは 100KB 前後 */
+  teacherPhotoMaxKB: z.number().int().min(50).max(5000),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -104,6 +106,7 @@ export const DEFAULT_SETTINGS: Settings = {
   inviteTokenDays: 7,
   reminderHour: 9,
   reviewMaxLength: 1000,
+  teacherPhotoMaxKB: 800,
 };
 
 export async function getSettings(db: Db): Promise<Settings> {

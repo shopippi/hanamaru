@@ -1,10 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { bookAsStudent } from '../src/domain/booking.js';
 import { applyScheduledStatuses } from '../src/domain/people.js';
-import { loadProfiles, teacherProfilesForStudent } from '../src/domain/registration.js';
+import { teacherProfilesForStudent, updateProfileAsAdmin } from '../src/domain/teacher-profiles.js';
 import { jst } from '../src/lib/time.js';
 import { setupHttp } from './http.js';
 
@@ -36,19 +33,13 @@ describe('TC-01 / TC-05 / TC-06 担当講師とプロフィール', () => {
     expect(logs.map((l: any) => l.action)).toContain('student.teachers');
   });
 
-  test('生徒には担当講師のプロフィールだけが表示され、データファイルの内容が反映される', async () => {
+  test('生徒には担当講師のプロフィールだけが表示され、管理画面で入れた内容が反映される', async () => {
     const { f, jiro } = await world();
-    const file = join(tmpdir(), `profiles-${Date.now()}.json`);
-    writeFileSync(
-      file,
-      JSON.stringify([
-        { slug: 'teacher-a', name: '講師A 表示名', photo: '/a.jpg', instruments: ['ピアノ'], career: '音大卒', message: 'よろしく' },
-        { slug: 'teacher-b', name: '講師B 表示名', photo: null, instruments: ['ギター'], career: '', message: '' },
-      ]),
-    );
-    const profiles = await teacherProfilesForStudent(f.ctx, jiro.actor, jiro.student.id, loadProfiles(file));
+    await updateProfileAsAdmin(f.ctx, f.admin, f.teacherA.teacher.id, { instruments: ['ピアノ'], career: '音大卒', message: 'よろしく' });
+    await updateProfileAsAdmin(f.ctx, f.admin, f.teacherB.teacher.id, { instruments: ['ギター'], career: '', message: '' });
+    const profiles = await teacherProfilesForStudent(f.ctx, jiro.actor, jiro.student.id);
     expect(profiles).toEqual([
-      { teacherId: f.teacherA.teacher.id, name: '講師A 表示名', photo: '/a.jpg', instruments: ['ピアノ'], career: '音大卒', message: 'よろしく' },
+      { teacherId: f.teacherA.teacher.id, name: f.teacherA.teacher.name, photo: null, instruments: ['ピアノ'], career: '音大卒', message: 'よろしく' },
     ]);
   });
 });
