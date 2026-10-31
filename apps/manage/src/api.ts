@@ -94,3 +94,15 @@ export function useBillingOptions(current?: string): { value: string; label: str
   if (current) enabled.add(current);
   return (Object.keys(BILLING_LABELS) as (keyof typeof BILLING_LABELS)[]).filter((k) => enabled.has(k)).map((k) => ({ value: k, label: BILLING_LABELS[k] }));
 }
+
+/** 操作記録の1行（OP-03）。操作の名前・内容は API が日本語にして返す */
+export interface AuditEntry {
+  id: string;
+  createdAt: string;
+  action: string;
+  label: string;
+  actorName: string;
+  byAdmin: boolean;
+  targetName: string | null;
+  summary: string;
+}

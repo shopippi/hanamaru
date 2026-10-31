@@ -30,7 +30,7 @@ import {
   useLoad,
   useToast,
 } from '@hanamaru/ui';
-import { api, useBillingOptions, type Course, type Package, type StudentStatus, type Teacher } from '../api.js';
+import { api, type AuditEntry, useBillingOptions, type Course, type Package, type StudentStatus, type Teacher } from '../api.js';
 
 // 生徒の詳細（4.1）: 基本情報、状態、管理用備考、講師用備考、レッスン記録、回数の履歴、入金記録
 
@@ -109,14 +109,7 @@ export function StudentDetail() {
         api.get<Teacher[]>('/teachers'),
         api.get<Course[]>('/courses'),
         api.get<Package[]>('/packages'),
-        api.get<
-          {
-            id: string;
-            action: string;
-            createdAt: string;
-            details: Record<string, unknown>;
-          }[]
-        >(`/audit-logs?targetType=student&targetId=${id}`),
+        api.get<AuditEntry[]>(`/audit-logs?targetType=student&targetId=${id}`),
       ]),
     [id],
   );
@@ -184,8 +177,16 @@ export function StudentDetail() {
               ) : (
                 <ul className="list small">
                   {logs.map((l) => (
-                    <li key={l.id}>
-                      <span className="muted num">{fmtDateTime(l.createdAt)}</span>　{l.action}
+                    <li key={l.id} className="list-row" style={{ alignItems: 'flex-start' }}>
+                      <span className="list-row-main">
+                        <span className="list-title">{l.label}</span>
+                        {l.summary && <span className="list-meta">{l.summary}</span>}
+                      </span>
+                      <span className="list-meta num nowrap" style={{ textAlign: 'right' }}>
+                        {fmtDateTime(l.createdAt)}
+                        <br />
+                        {l.actorName}
+                      </span>
                     </li>
                   ))}
                 </ul>
