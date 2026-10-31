@@ -2,7 +2,7 @@
 #   docker build -f infra/Dockerfile --target api -t hanamaru-api .
 #   docker build -f infra/Dockerfile --target web -t hanamaru-web .
 
-FROM node:22.22-bookworm-slim AS build
+FROM node:22.23-bookworm-slim AS build
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH CI=true
 RUN corepack enable
 WORKDIR /repo
@@ -18,7 +18,7 @@ RUN pnpm --filter @hanamaru/student --filter @hanamaru/staff --filter @hanamaru/
 RUN pnpm --filter @hanamaru/api deploy --prod --legacy /out/api
 
 # --- API ---------------------------------------------------------------------
-FROM node:22.22-bookworm-slim AS api
+FROM node:22.23-bookworm-slim AS api
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /out/api ./
