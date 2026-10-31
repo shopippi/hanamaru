@@ -14,6 +14,13 @@ updates:
       # 小さな更新はまとめて1つにする。大きな版の更新は1つずつ確かめる
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # 型定義は動かしている Node.js（22 LTS）に合わせる。Node.js を上げるときに一緒に上げる
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # TypeScript の大きな版は書き方が変わることがあるため、自動の提案はしない（必要なときに作業として上げる）
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: deps
   - package-ecosystem: github-actions
@@ -40,5 +47,9 @@ updates:
     groups:
       images:
         patterns: ["*"]
+    ignore:
+      # Node.js は長期サポート版（22）のまま。大きな版へは、作業として確かめてから上げる
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: docker
