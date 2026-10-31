@@ -37,10 +37,20 @@ const STATUS: Record<DomainError['code'], 400 | 401 | 403 | 404 | 409 | 422> = {
   rule: 422,
 };
 
+/** PostgreSQL の「値の形が正しくない」（uuid の列に uuid でない文字列など）。Drizzle は元のエラーを cause に入れる */
+function isInvalidId(e: unknown): boolean {
+  for (let x: unknown = e, i = 0; x && i < 3; x = (x as { cause?: unknown }).cause, i++) {
+    if ((x as { code?: unknown }).code === '22P02') return true;
+  }
+  return false;
+}
+
 export function errorResponse(c: Context, e: unknown) {
   if (e instanceof DomainError) {
     return c.json({ error: e.message, code: e.code, details: e.code === 'validation' || e.code === 'conflict' ? e.details : undefined }, STATUS[e.code]);
   }
+  // URL の ID の形が正しくない（uuid でない）ときは、ないものと同じ「見つからない」にする（5.2）
+  if (isInvalidId(e)) return c.json({ error: '見つかりませんでした', code: 'not_found' }, 404);
   // 想定外のエラー（OP-09）。短いエラー番号を画面に出し、同じ番号でログに残す。問い合わせのときに番号で探せる
   const errorId = randomBytes(4).toString('hex');
   console.error(`[error ${errorId}] ${c.req.method} ${c.req.path}`, e);

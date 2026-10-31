@@ -221,3 +221,16 @@ describe('AV-02 講師の画面での警告', () => {
     expect(confirmed.data.applied).toBe(true);
   });
 });
+
+describe('5.2 URL の ID の形が正しくないとき', () => {
+  test('5.2 形の正しくない ID は「見つからない」（404）にし、内部のエラーにしない', async () => {
+    const { setupHttp } = await import('./http.js');
+    const f = await setupHttp();
+    const admin = await f.adminBrowser();
+    for (const path of ['/students/not-a-uuid', '/teachers/xyz/profile']) {
+      const r = await admin.get(path);
+      expect(r.status, path).toBe(404);
+      expect(r.data.code, path).toBe('not_found');
+    }
+  });
+});
