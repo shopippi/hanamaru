@@ -18,15 +18,24 @@ export default defineConfig({
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'list' : 'line',
-  use: { locale: 'ja-JP', timezoneId: 'Asia/Tokyo', trace: 'retain-on-failure' },
+  use: {
+    locale: 'ja-JP',
+    timezoneId: 'Asia/Tokyo',
+    trace: 'retain-on-failure',
+    // 入っているブラウザの版が @playwright/test と合わない環境（作業用のクラウド環境など）では、
+    // PW_CHROMIUM_PATH でブラウザの実行ファイルを指定する。CI では指定しない（playwright install の版を使う）
+    ...(process.env.PW_CHROMIUM_PATH ? { launchOptions: { executablePath: process.env.PW_CHROMIUM_PATH } } : {}),
+  },
   projects: [
     // 生徒・講師・管理の基本操作を、iPhone と Android の大きさで
-    { name: 'iphone', testIgnore: /(scenarios|ui-rules|pwa)\.spec/, use: { ...devices['iPhone 13'], browserName: 'chromium' } },
-    { name: 'android', testIgnore: /(scenarios|ui-rules|pwa)\.spec/, use: { ...devices['Pixel 7'] } },
+    { name: 'iphone', testIgnore: /(scenarios|ui-rules|pwa|visual-mobile)\.spec/, use: { ...devices['iPhone 13'], browserName: 'chromium' } },
+    { name: 'android', testIgnore: /(scenarios|ui-rules|pwa|visual-mobile)\.spec/, use: { ...devices['Pixel 7'] } },
     // 画面の決まり（UI・MB・PW）。データは変えない
     { name: 'rules', testMatch: /(ui-rules|pwa)\.spec/, use: { ...devices['iPhone 13'], browserName: 'chromium' } },
     // 3章の流れを3つの画面をまたいで通す。データと時計を変えるので最後に流す
     { name: 'scenarios', testMatch: /scenarios\.spec/, dependencies: ['iphone', 'android', 'rules'], use: { ...devices['iPhone 13'], browserName: 'chromium' } },
+    // スマホの幅での見た目（重なり・はみ出し・切れ・44px）。長いデータを入れるので、いちばん最後に流す
+    { name: 'visual', testMatch: /visual-mobile\.spec/, dependencies: ['scenarios'], use: { ...devices['iPhone 13'], browserName: 'chromium' } },
   ],
   webServer: [
     {

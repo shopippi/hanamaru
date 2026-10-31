@@ -86,6 +86,8 @@ body {
   letter-spacing: 0.02em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* 長い URL や英数字の続きが枠からはみ出さないように折り返す（スマホの幅で確認） */
+  overflow-wrap: break-word;
 }
 
 h1,
@@ -192,6 +194,7 @@ hr {
 }
 .spread {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: var(--s3);
@@ -1344,9 +1347,14 @@ table.table {
 .table td.num,
 .table th.num {
   text-align: right;
+  white-space: nowrap;
 }
 .table a {
   font-weight: 600;
+}
+/* 表の名前の列: スマホで横に送る表でも、長い名前が1〜2文字ずつの縦長にならない幅を保つ */
+.table .person {
+  min-width: 10em;
 }
 
 /* 状態の印 */
