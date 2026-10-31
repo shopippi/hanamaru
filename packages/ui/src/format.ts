@@ -59,3 +59,16 @@ export const STUDENT_STATUS_LABEL: Record<string, string> = {
   withdrawn: '退会',
 };
 export const METHOD_LABEL: Record<string, string> = { card: 'カード', konbini: 'コンビニ', paypay: 'PayPay', cash: '現金' };
+
+/**
+ * テキストのファイルを読む。UTF-8 で読めなければ Shift_JIS として読む
+ * （日本語の Excel が保存する CSV は Shift_JIS のことが多い）
+ */
+export async function readTextFile(file: Blob): Promise<string> {
+  const bytes = await file.arrayBuffer();
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder('shift_jis').decode(bytes);
+  }
+}

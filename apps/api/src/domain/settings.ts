@@ -68,6 +68,8 @@ export const settingsSchema = z.object({
   reminderHour: z.number().int().min(0).max(23),
   /** レビュー1件の文字数の上限（RV-01） */
   reviewMaxLength: z.number().int().min(50).max(10000),
+  /** 繰り返し予約（RS-07）で一度に作れる期間（週） */
+  seriesMaxWeeks: z.number().int().min(1).max(104),
   /**
    * 講師の写真（TC-06）。おすすめの大きさ（KB）を超えても受け付け、画面に「画質を下げる」を出す。
    * 上限（MB）はサーバーを守るためだけのもの
@@ -118,6 +120,7 @@ export const DEFAULT_SETTINGS: Settings = {
   inviteTokenDays: 7,
   reminderHour: 9,
   reviewMaxLength: 1000,
+  seriesMaxWeeks: 52,
   teacherPhotoRecommendedKB: 800,
   teacherPhotoHardMaxMB: 15,
   notificationRetryMinutes: [5, 30, 120],

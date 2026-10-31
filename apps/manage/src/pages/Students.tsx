@@ -19,6 +19,7 @@ import {
   fmtDate,
   useAction,
   useLoad,
+  readTextFile,
   useToast,
 } from '@hanamaru/ui';
 import { api, useBillingOptions, type Course, type StudentRow, type Teacher } from '../api.js';
@@ -258,7 +259,8 @@ function CsvImport({ onDone }: { onDone: () => void }) {
           className="visually-hidden"
           onChange={async (e) => {
             const f = e.target.files?.[0];
-            if (f) setCsv(await f.text());
+            // Excel で保存した Shift_JIS の CSV もそのまま読める
+            if (f) setCsv(await readTextFile(f));
           }}
         />
       </label>

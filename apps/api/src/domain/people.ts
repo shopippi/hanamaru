@@ -482,7 +482,7 @@ export async function saveLessonRecord(ctx: Ctx, actor: Actor, reservationId: st
   await ctx.db
     .insert(lessonRecords)
     .values({ reservationId, studentId: r.studentId, teacherId, ...input })
-    .onConflictDoUpdate({ target: lessonRecords.reservationId, set: { ...input, updatedAt: new Date() } });
+    .onConflictDoUpdate({ target: lessonRecords.reservationId, set: { ...input, updatedAt: ctx.now() } });
 }
 
 /** 講師の担当レッスン一覧（4.1） */

@@ -74,9 +74,18 @@ async function bookFirstSlot(page: Page, nth = 0) {
   return label;
 }
 
+/**
+ * 予約に使える回数（今月分と来月分の合計）。予約は2日以上先の日を選ぶので、月末に流すと来月分を使う。
+ * どちらの月の分を使っても数えられるよう、ホームの画面が使う値を足し合わせる
+ */
 async function remaining(page: Page) {
   await page.goto(`${STUDENT}/`);
-  return Number((await page.locator('.big-number').innerText()).replace(/\D/g, ''));
+  await page.locator('.big-number').waitFor();
+  return page.evaluate(async () => {
+    const [student] = await (await fetch('/api/students')).json();
+    const home = await (await fetch(`/api/students/${student.id}/home`)).json();
+    return home.remaining + home.nextMonth.remaining;
+  });
 }
 
 async function adminSetting(browser: Browser, label: string, on: boolean) {
@@ -445,13 +454,26 @@ test('PY-17 / PY-15 単発の請求の入金状況が分かり、入金履歴を
 
 test('DB-02 ダッシュボードの予約は講師別・教室別に切り替えられる', async ({ browser }) => {
   const a = await adminPage(browser);
-  await a.getByRole('button', { name: '今週' }).click();
-  await a.getByRole('button', { name: '教室別' }).click();
-  // 教室別では部屋の名前（指定がなければ「教室の指定なし」）でまとめる
-  await expect(a.getByRole('heading', { name: /^(レッスン室1|教室の指定なし)\s*\d+件$/ }).first()).toBeVisible();
-  await expect(a.getByRole('heading', { name: /^松田 悠義\s*\d+件$/ })).toHaveCount(0);
-  await a.getByRole('button', { name: '講師別' }).click();
-  await expect(a.getByRole('heading', { name: /^松田 悠義\s*\d+件$/ })).toBeVisible();
+  // 予約は2日以上先に入れているので、週末に流すと「今週」に1件もないことがある。
+  // 次の予約の日の朝に時計を合わせてから見る（あとで戻す）
+  const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+  const until = new Date(Date.now() + (9 + 24 * 28) * 3600_000).toISOString().slice(0, 10);
+  const list = (await (await a.request.get(`${MANAGE}/api/reservations?from=${today}&to=${until}`)).json()) as { startsAt: string }[];
+  const next = list.map((r) => r.startsAt).sort()[0]!;
+  const day = new Date(new Date(next).getTime() + 9 * 3600_000).toISOString().slice(0, 10);
+  await setClock(`${day}T09:00:00+09:00`);
+  try {
+    await a.reload();
+    await a.getByRole('button', { name: '今週' }).click();
+    await a.getByRole('button', { name: '教室別' }).click();
+    // 教室別では部屋の名前（指定がなければ「教室の指定なし」）でまとめる
+    await expect(a.getByRole('heading', { name: /^(レッスン室1|教室の指定なし)\s*\d+件$/ }).first()).toBeVisible();
+    await expect(a.getByRole('heading', { name: /^松田 悠義\s*\d+件$/ })).toHaveCount(0);
+    await a.getByRole('button', { name: '講師別' }).click();
+    await expect(a.getByRole('heading', { name: /^松田 悠義\s*\d+件$/ })).toBeVisible();
+  } finally {
+    await setClock(null);
+  }
   await a.context().close();
 });
 

@@ -342,6 +342,17 @@ describe('RS-07 管理者の予約と繰り返し予約', () => {
     expect(more.warnings).toEqual(['11月の回数が2回足りません']);
   });
 
+  test('RS-07 繰り返し予約の期間は、終わりが始まりより後で、今日以降、設定の週数まで', async () => {
+    const f = await setup();
+    const { student, actor } = await f.mkStudent('太郎', { credits: 4 });
+    const base = { studentId: student.id, teacherId: f.teacherA.teacher.id, lessonTypeId: f.privateType.id, weekday: 4, startTime: '15:00' };
+    await expect(createSeries(f.ctx, f.admin, { ...base, startDate: '2026-11-26', endDate: '2026-11-05' })).rejects.toThrow('終わりの日');
+    await expect(createSeries(f.ctx, f.admin, { ...base, startDate: '2026-10-01', endDate: '2026-11-05' })).rejects.toThrow('今日より前');
+    // 初期値は52週まで。100年先までのような入力で、何千件も作らない
+    await expect(createSeries(f.ctx, f.admin, { ...base, startDate: '2026-10-22', endDate: '2099-12-31' })).rejects.toThrow('52週');
+    expect(await reservationsOfStudent(f.ctx, actor, student.id)).toEqual([]);
+  });
+
   test('管理者は締切後の連絡を、回数を戻さない取消として扱える', async () => {
     const f = await setup();
     const { student } = await f.mkStudent('太郎', { credits: 4 });

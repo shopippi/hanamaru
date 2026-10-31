@@ -24,7 +24,7 @@ import {
 import { audit } from './audit.js';
 import { actorId, type Actor, type Ctx } from './context.js';
 import { addLedger, availableCredits } from './credits.js';
-import { conflict, forbidden, notFound, ruleViolation } from './errors.js';
+import { conflict, DomainError, forbidden, invalid, notFound, ruleViolation } from './errors.js';
 import { listSlots, type Slot } from './availability.js';
 import { CANCEL_REASON_LABEL, messages } from './messages.js';
 import { cancelDeadlineLabel, cancelDeadlineOf, getSettings, type Settings } from './settings.js';
@@ -578,6 +578,13 @@ export interface SeriesInput {
  */
 export async function createSeries(ctx: Ctx, actor: Actor, input: SeriesInput) {
   assertAdmin(actor);
+  // 期間を確かめてから作る。終わりの日の打ち間違い（100年先など）で何千件も作らない
+  const { seriesMaxWeeks } = await getSettings(ctx.db);
+  if (input.endDate < input.startDate) throw invalid('終わりの日は、始まりの日より後にしてください');
+  if (input.startDate < dateOf(ctx.now())) throw invalid('始まりの日が今日より前です');
+  if (input.endDate > addDays(input.startDate, seriesMaxWeeks * 7)) {
+    throw invalid(`繰り返し予約は、一度に${seriesMaxWeeks}週までにしてください`);
+  }
   const student = await loadStudent(ctx.db, input.studentId);
   if (!(await isAssigned(ctx.db, student.id, input.teacherId))) {
     throw ruleViolation('担当講師ではありません。先に担当講師に設定してください');
@@ -605,7 +612,9 @@ export async function createSeries(ctx: Ctx, actor: Actor, input: SeriesInput) {
       });
       created.push(r);
     } catch (e) {
-      skipped.push({ date: d, reason: e instanceof Error ? e.message : String(e) });
+      // 想定した理由（空きがない・重なる）はそのまま出し、想定外のエラーの中身は画面に出さない
+      if (!(e instanceof DomainError)) console.error('series reservation failed', d, e);
+      skipped.push({ date: d, reason: e instanceof DomainError ? e.message : '予約できませんでした' });
     }
   }
   await audit(ctx.db, actor, 'reservation.series.create', 'reservation_series', series!.id, {

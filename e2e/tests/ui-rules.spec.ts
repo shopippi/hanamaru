@@ -84,6 +84,10 @@ async function audit(page: Page) {
         e.querySelector('img[alt]:not([alt=""])');
       if (!label && (e as HTMLInputElement).type !== 'hidden') problems.push(`UI-19 ${name(e)}`);
     }
+    // UI-04・MB: スマホの幅でページ全体が横にはみ出さない（表などは枠の中で横に動かす）
+    if (document.documentElement.scrollWidth > window.innerWidth + 1) {
+      problems.push(`overflow ${document.documentElement.scrollWidth}px > ${window.innerWidth}px`);
+    }
     return problems;
   });
 }

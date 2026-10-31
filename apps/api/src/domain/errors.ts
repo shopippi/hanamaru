@@ -1,3 +1,5 @@
+// 入力の誤りの文言を日本語にする（すべての入力の検証より先に読み込まれる）
+import '../lib/zod-ja.js';
 /** 画面にそのまま出せる日本語の理由を持つ業務エラー */
 export class DomainError extends Error {
   constructor(

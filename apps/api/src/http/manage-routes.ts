@@ -61,7 +61,7 @@ import {
   teacherMonthStats,
 } from '../domain/schedule.js';
 import { getSettings, settingsPatchSchema, updateSettings } from '../domain/settings.js';
-import { audit } from '../domain/audit.js';
+import { audit, auditLogsForAdmin } from '../domain/audit.js';
 import { jst, monthOf } from '../lib/time.js';
 import { body, rawBody, dateParam, isoDateTime, monthParam, photoResponse, query, requireAuth, type AppDeps, type Env } from './app.js';
 import { deletePhotoAsAdmin, photoForAdmin, profileForAdmin, setPhotoAsAdmin, updateProfileAsAdmin } from '../domain/teacher-profiles.js';
@@ -356,17 +356,7 @@ export function manageRoutes(deps: AppDeps) {
   // --- 操作記録（OP-03） ---
   priv.get('/audit-logs', async (c) => {
     const q = query(c, z.object({ targetType: z.string().optional(), targetId: z.string().optional() }));
-    const conds = [];
-    if (q.targetType) conds.push(eq(auditLogs.targetType, q.targetType));
-    if (q.targetId) conds.push(eq(auditLogs.targetId, q.targetId));
-    return c.json(
-      await ctx.db
-        .select()
-        .from(auditLogs)
-        .where(conds.length ? and(...conds) : undefined)
-        .orderBy(desc(auditLogs.createdAt))
-        .limit(500),
-    );
+    return c.json(await auditLogsForAdmin(ctx, c.get('actor'), q));
   });
 
   app.route('/', priv);

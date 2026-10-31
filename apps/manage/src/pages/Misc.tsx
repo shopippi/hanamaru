@@ -26,7 +26,7 @@ import {
   useLoad,
   useToast,
 } from '@hanamaru/ui';
-import { api, type LessonType, type Slot, type Teacher } from '../api.js';
+import { api, type AuditEntry, type LessonType, type Slot, type Teacher } from '../api.js';
 
 // 体験の申込（TR-01）、休講（AV-04）、設定（3.8）、操作記録（OP-03）
 
@@ -254,6 +254,7 @@ export function Closures() {
 
 type Settings = {
   publishWeeks: number;
+  seriesMaxWeeks: number;
   reserveDeadlineHours: number;
   changeDeadlineHours: number;
   cancelDeadlineHours: number;
@@ -347,6 +348,7 @@ export function SettingsPage() {
                     : numField('cancelDeadlineHours', 'キャンセルの締切（何時間前まで）')}
                 </div>
                 {numField('publishWeeks', '生徒に予約を公開する期間（週）', '受付日と空き時間は「受付日」と講師の画面のカレンダーで決めます')}
+                {numField('seriesMaxWeeks', '繰り返し予約で一度に作れる期間（週）')}
                 <Checkbox label="予約を管理者の承認制にする（承認まで「仮予約」）" checked={s.approvalRequired} onChange={(e) => set('approvalRequired', e.target.checked)} />
                 </div>
               </Panel>
@@ -588,36 +590,9 @@ function InviteCodes() {
   );
 }
 
-const ACTION_LABEL: Record<string, string> = {
-  'student.create': '生徒の登録',
-  'student.update': '生徒情報の変更',
-  'student.status': '状態の変更',
-  'student.approve': '登録の承認',
-  'student.teachers': '担当講師の変更',
-  'student.note.admin': '管理用備考の変更',
-  'student.note.teacher': '講師用備考の変更',
-  'credits.adjust': '回数の手動調整',
-  'payment.cash': '現金の入金記録',
-  'settings.update': '設定の変更',
-  'reservation.create': '代理予約',
-  'reservation.cancel': '予約の取消',
-  'reservation.approve': '仮予約の承認',
-  'reservation.reject': '仮予約の却下',
-  'reservation.attendance': '出欠',
-  'reservation.series.create': '繰り返し予約',
-  'availability.change': '空き時間の変更',
-  'closure.create': '休講',
-  'closure.delete': '休講の取消',
-  'course.price': '料金の改定',
-  'teacher.profile': '講師のプロフィールの変更',
-  'teacher.photo': '講師の写真の変更',
-  'teacher.photo_delete': '講師の写真の削除',
-  'notification.resend': '通知の再送',
-  'notification.dismiss': '通知を送らないことにした',
-};
 
 export function Audit() {
-  const { state, reload } = useLoad(() => api.get<{ id: string; action: string; targetType: string; targetId: string | null; actorAccountId: string | null; createdAt: string; details: unknown }[]>('/audit-logs'), []);
+  const { state, reload } = useLoad(() => api.get<AuditEntry[]>('/audit-logs'), []);
   return (
     <div>
       <PageHeader title="操作記録" description="入金記録、回数の調整、解約・休会、担当講師の変更、設定の変更などを、誰が・いつ・何をしたか記録しています（最新500件）。" />
@@ -634,21 +609,21 @@ export function Audit() {
                   <tr>
                     <th scope="col">日時</th>
                     <th scope="col">操作</th>
-                    <th scope="col">操作した人</th>
+                    <th scope="col">対象</th>
                     <th scope="col">内容</th>
+                    <th scope="col">操作した人</th>
                   </tr>
                 </thead>
                 <tbody>
                   {list.map((l) => (
                     <tr key={l.id}>
-                      <td className="nowrap num">{fmtDateTime(l.createdAt)}</td>
+                      <td className="nowrap"><span className="num">{fmtDateTime(l.createdAt)}</span></td>
                       <td className="nowrap">
-                        <strong>{ACTION_LABEL[l.action] ?? l.action}</strong>
+                        <strong>{l.label}</strong>
                       </td>
-                      <td className="nowrap">{l.actorAccountId ? <span className="badge">管理者</span> : <span className="badge badge-muted">自動処理</span>}</td>
-                      <td className="small">
-                        <code style={{ wordBreak: 'break-all' }}>{JSON.stringify(l.details)}</code>
-                      </td>
+                      <td>{l.targetName ?? <span className="muted">—</span>}</td>
+                      <td className="small">{l.summary || <span className="muted">—</span>}</td>
+                      <td className="nowrap">{l.byAdmin ? <span className="badge">{l.actorName}</span> : <span className="badge badge-muted">自動処理</span>}</td>
                     </tr>
                   ))}
                 </tbody>
