@@ -15,7 +15,7 @@
 		X-Frame-Options DENY
 		Referrer-Policy strict-origin-when-cross-origin
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
-		Content-Security-Policy "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Content-Security-Policy "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		-Server
 	}
 	encode gzip
@@ -33,6 +33,10 @@
 
 http://{$STUDENT_HOST} {
 	import common
+	# 外形監視（docs/operations.md の 4）。API とデータベースの健康状態をそのまま返す（OP-08）
+	handle /api/health {
+		reverse_proxy api:3000
+	}
 	# Stripe の通知（Webhook）。管理のサブドメインは Cloudflare Access の内側なので、こちらで受ける
 	handle /api/stripe/* {
 		reverse_proxy api:3000
