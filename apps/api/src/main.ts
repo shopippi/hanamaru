@@ -6,6 +6,7 @@ import { ConsoleEmailTransport, EmailChannel, NotificationService } from './doma
 import { StaticCaptcha, TurnstileVerifier } from './http/captcha.js';
 import { createApp } from './http/index.js';
 import { runJobs } from './domain/jobs.js';
+import { ResendEmailTransport } from './integrations/resend.js';
 import { StripeGateway } from './integrations/stripe.js';
 
 // API サーバーの起動。設定はすべて環境変数から読む（秘密情報はリポジトリに入れない: 7.2）
@@ -30,6 +31,12 @@ const env = z
     APP_BUILT_AT: z.string().optional(),
     /** バックアップが最後に成功した時刻を書くファイル（infra/backup と共有するボリューム） */
     BACKUP_STATUS_FILE: z.string().optional(),
+    /** メール送信（Resend）。未設定ならメールは送らずに標準出力へ書く（開発用） */
+    RESEND_API_KEY: z.string().optional(),
+    /** 送信元。Resend で確認したドメインのアドレス */
+    MAIL_FROM: z.string().default('はなまる音楽教室 <no-reply@send.hanamarumusic.com>'),
+    /** 返信先（例: info@hanamarumusic.com） */
+    MAIL_REPLY_TO: z.string().optional(),
   })
   .parse(process.env);
 
@@ -43,8 +50,14 @@ const { db } = await connect(env.DATABASE_URL);
 const ctx: Ctx = {
   db,
   now: () => new Date(),
-  // メール送信サービスは未選定（8.2）。決まるまでは標準出力に書く
-  notifier: new NotificationService(db, [new EmailChannel(new ConsoleEmailTransport())]),
+  // メールは Resend で送る（8.2）。キーがなければ送らずに標準出力へ書き、「システムの状態」で要確認にする
+  notifier: new NotificationService(db, [
+    new EmailChannel(
+      env.RESEND_API_KEY
+        ? new ResendEmailTransport({ apiKey: env.RESEND_API_KEY, from: env.MAIL_FROM, replyTo: env.MAIL_REPLY_TO })
+        : new ConsoleEmailTransport(),
+    ),
+  ]),
   payments: new StripeGateway(env.STRIPE_SECRET_KEY, env.STRIPE_WEBHOOK_SECRET, env.STRIPE_PORTAL_CONFIGURATION_ID),
   urls: { student: env.STUDENT_URL, staff: env.STAFF_URL, manage: env.MANAGE_URL },
   system: {
@@ -52,6 +65,7 @@ const ctx: Ctx = {
     builtAt: env.APP_BUILT_AT,
     backupStatusFile: env.BACKUP_STATUS_FILE,
     jobsScheduled: env.JOB_INTERVAL_MINUTES > 0,
+    mailConfigured: Boolean(env.RESEND_API_KEY),
   },
 };
 

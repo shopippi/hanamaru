@@ -178,12 +178,24 @@ describe('OP-07 古い記録の片付け', () => {
 });
 
 describe('OP-08 システムの状態', () => {
+  test('OP-08 本番・検証環境でメール送信（Resend）が設定されていなければ、要確認にする', async () => {
+    const f = await setup();
+    f.ctx.system = { jobsScheduled: true, mailConfigured: false };
+    await runJobs(f.ctx);
+    const st = await systemStatus(f.ctx, f.admin);
+    expect(st.notifications).toMatchObject({ deliveryConfigured: false, state: 'attention' });
+    expect(st.attention).toContain('メール送信（Resend）が設定されていないため、メールが届きません');
+    // 開発用（定期処理を動かしていない所）では要確認にしない
+    f.ctx.system = { jobsScheduled: false, mailConfigured: false };
+    expect((await systemStatus(f.ctx, f.admin)).notifications.state).toBe('ok');
+  });
+
   test('OP-08 管理者は、定期処理・Stripe の通知・通知の送信・バックアップの状態を一覧できる。講師と生徒は見られない', async () => {
     const f = await setup();
     const dir = mkdtempSync(join(tmpdir(), 'hm-backup-'));
     const file = join(dir, 'last-success');
     writeFileSync(file, new Date(f.clock.now.getTime() - 2 * 60 * MINUTE).toISOString());
-    f.ctx.system = { version: 'abc1234', builtAt: '2026-10-20', backupStatusFile: file, jobsScheduled: true };
+    f.ctx.system = { version: 'abc1234', builtAt: '2026-10-20', backupStatusFile: file, jobsScheduled: true, mailConfigured: true };
 
     // 定期処理が一度も動いていなければ「動いていません」
     let st = await systemStatus(f.ctx, f.admin);

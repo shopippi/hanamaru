@@ -46,6 +46,10 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:?set STRIPE_WEBHOOK_SECRET}
       STRIPE_PORTAL_CONFIGURATION_ID: ${STRIPE_PORTAL_CONFIGURATION_ID:-}
       TURNSTILE_SECRET: ${TURNSTILE_SECRET:-}
+      # メール送信（Resend）。キーがないとメールは届かず、システムの状態が「要確認」になる
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-はなまる音楽教室 <no-reply@send.hanamarumusic.com>}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
       JOB_INTERVAL_MINUTES: "5"
       # システムの状態の画面（OP-08）に出す版と、バックアップの成否
       APP_VERSION: ${APP_VERSION:-${RELEASE:-local}}
