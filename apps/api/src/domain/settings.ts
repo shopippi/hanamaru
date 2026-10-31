@@ -19,6 +19,7 @@ export const NOTIFICATION_TYPES = [
   'invite',
   'password_reset',
   'trial_request',
+  'system_alert',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -67,8 +68,19 @@ export const settingsSchema = z.object({
   reminderHour: z.number().int().min(0).max(23),
   /** レビュー1件の文字数の上限（RV-01） */
   reviewMaxLength: z.number().int().min(50).max(10000),
-  /** 講師の写真の大きさの上限（KB）（TC-06）。画面で縮めてから送るので、ふつうは 100KB 前後 */
-  teacherPhotoMaxKB: z.number().int().min(50).max(5000),
+  /**
+   * 講師の写真（TC-06）。おすすめの大きさ（KB）を超えても受け付け、画面に「画質を下げる」を出す。
+   * 上限（MB）はサーバーを守るためだけのもの
+   */
+  teacherPhotoRecommendedKB: z.number().int().min(50).max(5000),
+  teacherPhotoHardMaxMB: z.number().int().min(1).max(20),
+  /** 送れなかった通知を送り直すまでの分（OP-06）。並べた回数だけ送り直し、それでも届かなければあきらめる */
+  notificationRetryMinutes: z.array(z.number().int().min(1).max(7 * 24 * 60)).min(1).max(10),
+  /** 同じ処理の失敗を管理者に知らせる間隔（時間）（OP-05） */
+  systemAlertIntervalHours: z.number().int().min(1).max(24 * 7),
+  /** 古い記録の片付け（OP-07）。Stripe の通知の受信記録と、通知の本文を残す日数 */
+  stripeEventRetentionDays: z.number().int().min(30).max(3650),
+  notificationBodyRetentionDays: z.number().int().min(7).max(3650),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -106,7 +118,12 @@ export const DEFAULT_SETTINGS: Settings = {
   inviteTokenDays: 7,
   reminderHour: 9,
   reviewMaxLength: 1000,
-  teacherPhotoMaxKB: 800,
+  teacherPhotoRecommendedKB: 800,
+  teacherPhotoHardMaxMB: 15,
+  notificationRetryMinutes: [5, 30, 120],
+  systemAlertIntervalHours: 24,
+  stripeEventRetentionDays: 180,
+  notificationBodyRetentionDays: 90,
 };
 
 export async function getSettings(db: Db): Promise<Settings> {

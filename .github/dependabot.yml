@@ -1,0 +1,44 @@
+# 依存ライブラリ・GitHub Actions・Docker イメージの更新を、毎週まとめてプルリクエストにする（OP-10）。
+# CI の受入テストと画面の通しテストが通ったものを、作成者が確認して取り込む（勝手には取り込まれない）。
+version: 2
+updates:
+  - package-ecosystem: npm # pnpm のワークスペース（pnpm-lock.yaml）
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 3
+    groups:
+      # 小さな更新はまとめて1つにする。大きな版の更新は1つずつ確かめる
+      minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: deps
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+  - package-ecosystem: docker
+    directories: [/infra, /infra/backup]
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 2
+    groups:
+      images:
+        patterns: ["*"]
+    commit-message:
+      prefix: docker

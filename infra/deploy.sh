@@ -19,6 +19,9 @@ if docker compose -f infra/compose.yml --env-file infra/.env ps --status running
 fi
 
 export RELEASE="$TAG"
+# システムの状態の画面（OP-08）に、どの版をいつ反映したかを出す
+export APP_VERSION="$TAG ($(git rev-parse --short HEAD))"
+export APP_BUILT_AT="$(date -Iseconds)"
 docker compose -f infra/compose.yml --env-file infra/.env build --pull
 docker compose -f infra/compose.yml --env-file infra/.env up -d --remove-orphans
 docker compose -f infra/compose.yml --env-file infra/.env ps

@@ -14,6 +14,17 @@ export interface PortalUrls {
   manage: string;
 }
 
+/** システムの状態の画面（OP-08）に出す、動いている環境の情報 */
+export interface SystemInfo {
+  /** 版（デプロイしたコミットなど）。分からなければ省く */
+  version?: string;
+  builtAt?: string;
+  /** バックアップが最後に成功した時刻を書くファイル（infra/backup が書く） */
+  backupStatusFile?: string;
+  /** 定期処理を数分おきに動かしている（本番・検証環境）。止まっていたら「要確認」にする */
+  jobsScheduled?: boolean;
+}
+
 export interface Ctx {
   db: Db;
   now: () => Date;
@@ -21,6 +32,7 @@ export interface Ctx {
   /** 決済（Stripe）。テストでは偽物に差し替える */
   payments: PaymentGateway;
   urls: PortalUrls;
+  system?: SystemInfo;
 }
 
 export const SYSTEM: Actor = { kind: 'system' };

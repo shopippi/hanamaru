@@ -515,8 +515,26 @@ export const notifications = pgTable('notifications', {
   body: text('body').notNull(),
   status: notificationStatusEnum('status').notNull().default('pending'),
   error: text('error'),
+  /** 送ろうとした回数（OP-06）。失敗したら nextRetryAt に送り直す。null は送り直さない */
+  attempts: integer('attempts').notNull().default(0),
+  nextRetryAt: ts('next_retry_at'),
   createdAt: createdAt(),
   sentAt: ts('sent_at'),
+});
+
+/**
+ * 定期処理と Stripe の通知の受け取りの、最後の実行結果（OP-05）。
+ * 失敗が続いたら管理者にメールで知らせ、直ったら「復旧しました」と知らせる
+ */
+export const jobRuns = pgTable('job_runs', {
+  name: text('name').primaryKey(),
+  lastStartedAt: ts('last_started_at'),
+  lastSucceededAt: ts('last_succeeded_at'),
+  lastFailedAt: ts('last_failed_at'),
+  lastError: text('last_error'),
+  consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+  /** 最後に管理者へ知らせた時刻。同じ処理の失敗は1日に1回までしか知らせない */
+  lastAlertAt: ts('last_alert_at'),
 });
 
 /** 管理者の操作記録（OP-03） */

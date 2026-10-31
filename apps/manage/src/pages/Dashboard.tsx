@@ -45,6 +45,8 @@ interface Dash {
     pendingReservations: number;
     newTrialRequests: number;
     creditShortages: { studentId: string; studentName: string; month: string; shortBy: number }[];
+    /** システムの状態の要確認（OP-08） */
+    systemAttention: number;
   };
 }
 interface Res {
@@ -96,6 +98,7 @@ export function Dashboard() {
                 {s.studentName}: {fmtMonthShort(s.month)}の回数が{s.shortBy}回足りません
               </Link>
             )),
+            d.todo.systemAttention > 0 && <Link key="sys" to="/system">システムに要確認があります（{d.todo.systemAttention}件）</Link>,
           ].filter(Boolean);
           const list = range === 'today' ? d.reservations.today : d.reservations.week;
           const groups = new Map<string, Res[]>();

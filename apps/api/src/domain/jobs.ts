@@ -8,6 +8,7 @@ import { closeMonth } from './credits.js';
 import { messages } from './messages.js';
 import { applyScheduledStatuses } from './people.js';
 import { getSettings } from './settings.js';
+import { cleanup, retryNotifications, trackedRun } from './system.js';
 
 // 定期処理。どれも何度実行しても結果が同じになるように作り、数分おきに全部を流す。
 // （月の切り替わりの瞬間にサーバーが止まっていても、次に動いたときに追いつく）
@@ -76,11 +77,16 @@ export async function runJobs(ctx: Ctx): Promise<JobReport[]> {
     ['reconcilePayments', () => reconcilePayments(ctx)],
     // 前日リマインド（NT-01）
     ['sendReminders', () => sendReminders(ctx)],
+    // 送れなかった通知の送り直し（OP-06）
+    ['retryNotifications', () => retryNotifications(ctx)],
+    // 古い記録の片付け（OP-07）
+    ['cleanup', () => cleanup(ctx)],
   ];
   const reports: JobReport[] = [];
   for (const [name, run] of jobs) {
     try {
-      reports.push({ name, result: await run() });
+      // 成否を記録し、失敗が続いたら管理者に知らせる（OP-05）
+      reports.push({ name, result: await trackedRun(ctx, name, run) });
     } catch (e) {
       console.error(`job ${name} failed`, e);
       reports.push({ name, error: e instanceof Error ? e.message : String(e) });

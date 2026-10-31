@@ -25,6 +25,11 @@ const env = z
     STRIPE_PORTAL_CONFIGURATION_ID: z.string().optional(),
     /** 定期処理の間隔（分）。0 なら動かさない */
     JOB_INTERVAL_MINUTES: z.coerce.number().default(5),
+    /** システムの状態の画面に出す版（デプロイしたコミットと日時。infra/deploy.sh が入れる） */
+    APP_VERSION: z.string().optional(),
+    APP_BUILT_AT: z.string().optional(),
+    /** バックアップが最後に成功した時刻を書くファイル（infra/backup と共有するボリューム） */
+    BACKUP_STATUS_FILE: z.string().optional(),
   })
   .parse(process.env);
 
@@ -42,6 +47,12 @@ const ctx: Ctx = {
   notifier: new NotificationService(db, [new EmailChannel(new ConsoleEmailTransport())]),
   payments: new StripeGateway(env.STRIPE_SECRET_KEY, env.STRIPE_WEBHOOK_SECRET, env.STRIPE_PORTAL_CONFIGURATION_ID),
   urls: { student: env.STUDENT_URL, staff: env.STAFF_URL, manage: env.MANAGE_URL },
+  system: {
+    version: env.APP_VERSION,
+    builtAt: env.APP_BUILT_AT,
+    backupStatusFile: env.BACKUP_STATUS_FILE,
+    jobsScheduled: env.JOB_INTERVAL_MINUTES > 0,
+  },
 };
 
 if (!env.STRIPE_PORTAL_CONFIGURATION_ID && process.env.NODE_ENV === 'production') {
