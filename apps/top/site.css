@@ -313,6 +313,35 @@ th.num {
   padding: 12px;
 }
 
+/* 写真が届いたら、枠いっぱいに出す */
+.photo.has-img {
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: var(--sunken);
+}
+.photo.has-img img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.card .role {
+  font-size: 13px;
+  color: var(--muted);
+}
+.tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  vertical-align: middle;
+}
+
 /* 申し込みからレッスンまで（順番そのものが意味を持つので番号を付ける） */
 .steps {
   display: grid;
