@@ -19,11 +19,11 @@
 - 予約できるか・見られるかの判定は `apps/api/src/domain/` にだけ置く（2章の6）。画面やルーティングに同じ判定を書かない
   - 権限: `domain/access.ts`、予約のルール: `domain/booking.ts`、回数: `domain/credits.ts`、空き時間: `domain/availability.ts`
 - 回数の増減は必ず `credit_ledger` に行を足す（OP-04）。残り回数は月ごとの合計
-- 管理者の操作は `audit()` で記録する（OP-03）
+- 管理者の操作は `audit()` で記録する（OP-03）。新しい操作の名前を使ったら、`domain/audit.ts` の `AUDIT_LABELS` に日本語の名前を足す（足し忘れると `test/audit.test.ts` が失敗する）
 - 通知は `Notifier` 経由で、処理の確定後に送る。送信手段は `Channel` を足すだけで増やせる（NT-03）
 - 時刻はすべて日本時間（`lib/time.ts`）。月は 'YYYY-MM'、日付は 'YYYY-MM-DD'
 - 他人の生徒・予約は「見つからない」（not_found）として扱い、存在も知らせない（5.2）
-- エラーの文言は画面にそのまま出せる日本語で書く
+- エラーの文言は画面にそのまま出せる日本語で書く。入力の検証（zod）の既定の文言も `lib/zod-ja.ts` で日本語にしている
 - 状態を変える API は JSON だけを受け付ける（CSRF 対策）。Cookie はポータルごとに分ける（4.4）
 - 回数は入金が確定してから付ける（PY-05）。Stripe の通知は stripe_events で重複を弾き、付与は (入金, 理由) で一意（OP-02）
 - 業務ルールの中で「今」を使うときは `ctx.now()`。DB の既定値（now()）に頼る比較はしない
