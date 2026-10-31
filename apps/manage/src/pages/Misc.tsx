@@ -617,7 +617,7 @@ export function Audit() {
                 <tbody>
                   {list.map((l) => (
                     <tr key={l.id}>
-                      <td className="nowrap num">{fmtDateTime(l.createdAt)}</td>
+                      <td className="nowrap"><span className="num">{fmtDateTime(l.createdAt)}</span></td>
                       <td className="nowrap">
                         <strong>{l.label}</strong>
                       </td>
