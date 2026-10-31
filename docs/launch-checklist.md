@@ -19,7 +19,7 @@
 ## 作成者がやること
 
 ### 1. メール送信（公開に必須）
-- ⬜ Resend を使うことを承認する（新しい外部サービスのため。比較は PR #14 の `docs/mail-options.md`）
+- ⬜ Resend を使うことを承認する（新しい外部サービスのため。比較は [docs/mail-options.md](mail-options.md)）
 - ⬜ Resend に登録し、送信用のドメイン（例: `send.hanamarumusic.com`）を追加して、表示される DNS の値を Cloudflare に入れる
 - ⬜ API キーを本番の環境変数に入れる（リポジトリには入れない）。開発に連絡すると、送信手段をつなぐ（数時間の作業）
 - ⬜ 受け取り用: Cloudflare の Email Routing で `info@hanamarumusic.com` を Gmail に転送する（無料）
