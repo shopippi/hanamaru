@@ -74,3 +74,14 @@ test('OP-06 / OP-08 届けられなかった通知を、システムの状態の
   await expect(row).toHaveCount(0);
   expect((await mails()).some((m) => m.to === email && m.subject.includes('体験レッスンのお申込'))).toBe(true);
 });
+
+test('ST-01 Excel で保存した Shift_JIS の CSV も、文字化けせずに読み込める', async ({ page }) => {
+  await loginAdmin(page);
+  await adminNav(page, '生徒');
+  await page.getByRole('button', { name: 'CSVで登録' }).click();
+  // 「ログインメール,保護者名,…」と1行の生徒を Shift_JIS にしたもの
+  const sjis = Buffer.from('838d834f834383938381815b838b2c95db8cec8ed296bc2c90b6936b96bc2c9364986294d48d862c90b6936b82cc8381815b838b2c8f5a8f8a0d0a736a6973406578616d706c652e746573742c97e996d82089d42c97e996d82082bb82e72c3039302d303030302d313131312c2c0d0a', 'hex');
+  await page.locator('input[type=file]').setInputFiles({ name: 'students.csv', mimeType: 'text/csv', buffer: sjis });
+  await expect(page.getByLabel('CSVの内容')).toHaveValue(/^ログインメール,保護者名,生徒名/);
+  await expect(page.getByLabel('CSVの内容')).toHaveValue(/鈴木 そら/);
+});
