@@ -18,7 +18,14 @@ export default defineConfig({
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'list' : 'line',
-  use: { locale: 'ja-JP', timezoneId: 'Asia/Tokyo', trace: 'retain-on-failure' },
+  use: {
+    locale: 'ja-JP',
+    timezoneId: 'Asia/Tokyo',
+    trace: 'retain-on-failure',
+    // 入っているブラウザの版が @playwright/test と合わない環境（作業用のクラウド環境など）では、
+    // PW_CHROMIUM_PATH でブラウザの実行ファイルを指定する。CI では指定しない（playwright install の版を使う）
+    ...(process.env.PW_CHROMIUM_PATH ? { launchOptions: { executablePath: process.env.PW_CHROMIUM_PATH } } : {}),
+  },
   projects: [
     // 生徒・講師・管理の基本操作を、iPhone と Android の大きさで
     { name: 'iphone', testIgnore: /(scenarios|ui-rules|pwa)\.spec/, use: { ...devices['iPhone 13'], browserName: 'chromium' } },
