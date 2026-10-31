@@ -3,17 +3,24 @@
 # R2 側はバケットのライフサイクルルールで30日より古いものを消す（docs/operations.md）。
 # VPS の中にも直近7日分を残す。
 set -eu
+# pg_dump が途中で失敗したら、壊れたファイルを成功として送らない（パイプの途中の失敗も止める）
+set -o pipefail
 
 backup_once() {
+  # 毎日の繰り返しでは `if backup_once` の中で呼ぶため set -e が効かない。各段階の失敗をここで確かめる
   name="hanamaru-$(date +%Y%m%d-%H%M%S).sql.gz"
-  pg_dump --no-owner --no-privileges | gzip -9 > "/backups/$name.tmp"
-  mv "/backups/$name.tmp" "/backups/$name"
+  if ! pg_dump --no-owner --no-privileges | gzip -9 > "/backups/$name.tmp"; then
+    rm -f -- "/backups/$name.tmp"
+    echo "pg_dump failed: nothing uploaded" >&2
+    return 1
+  fi
+  mv "/backups/$name.tmp" "/backups/$name" || return 1
   if [ -n "${R2_ENDPOINT:-}" ]; then
     curl --fail --silent --show-error \
       --aws-sigv4 "aws:amz:auto:s3" \
       --user "$R2_ACCESS_KEY_ID:$R2_SECRET_ACCESS_KEY" \
       -T "/backups/$name" \
-      "$R2_ENDPOINT/$R2_BUCKET/$name"
+      "$R2_ENDPOINT/$R2_BUCKET/$name" || { echo "upload failed: $name" >&2; return 1; }
     echo "uploaded $name"
     # システムの状態の画面（OP-08）に出す。VPS の外（R2）へ送れたときだけ成功とする
     mkdir -p /status && date -Iseconds > /status/backup-last-success.tmp && mv /status/backup-last-success.tmp /status/backup-last-success
