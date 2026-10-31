@@ -35,13 +35,20 @@ async function audit(page: Page) {
       const s = getComputedStyle(e);
       return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && !e.closest('[aria-hidden="true"], .visually-hidden, dialog:not([open])');
     };
+    // UI-01: 白・黒・グレーと、差し色のトークン（暗い青と未確認の赤い点）だけ。値はスタイルシートのトークンから読む
+    const root = getComputedStyle(document.documentElement);
+    const allowed = new Set(
+      ['--accent', '--accent-hover', '--accent-soft', '--accent-line', '--dot'].map((t) => {
+        const hex = root.getPropertyValue(t).trim().replace('#', '');
+        return [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(',');
+      }),
+    );
     for (const e of document.querySelectorAll('body *')) {
       if (!visible(e)) continue;
       const s = getComputedStyle(e);
-      // UI-01: 白・黒・グレーのみ
       for (const prop of ['color', 'backgroundColor', 'borderTopColor'] as const) {
         const c = parse(s[prop]);
-        if (c && c.a > 0 && !(c.r === c.g && c.g === c.b)) problems.push(`UI-01 ${prop} ${s[prop]} ${name(e)}`);
+        if (c && c.a > 0 && !(c.r === c.g && c.g === c.b) && !allowed.has(`${c.r},${c.g},${c.b}`)) problems.push(`UI-01 ${prop} ${s[prop]} ${name(e)}`);
       }
       // UI-05: 文字と背景の明暗差（大きい文字は 3:1、それ以外は 4.5:1）。押せない状態のボタンは対象外
       const hasText = [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent!.trim());
@@ -102,7 +109,7 @@ test('UI-01 / UI-03 / UI-04 / UI-05 / UI-19 生徒の画面', async ({ page }) =
 
 test('UI-01 / UI-03 / UI-04 / UI-05 / UI-19 講師の画面', async ({ page }) => {
   await login(page, STAFF, 'teacher@example.test');
-  for (const path of ['/', '/students', '/availability']) {
+  for (const path of ['/', '/students', '/availability', '/reviews', '/profile']) {
     await page.goto(`${STAFF}${path}`);
     await page.locator('main h1').first().waitFor();
     await page.waitForTimeout(400);
@@ -112,12 +119,18 @@ test('UI-01 / UI-03 / UI-04 / UI-05 / UI-19 講師の画面', async ({ page }) =
 
 test('UI-01 / UI-03 / UI-04 / UI-05 / UI-19 管理の画面', async ({ page }) => {
   await loginAdmin(page);
-  for (const path of ['/', '/calendar', '/students', '/teachers', '/payments', '/charges', '/trials', '/pricing', '/school-hours', '/closures', '/settings', '/audit']) {
+  for (const path of ['/', '/calendar', '/students', '/teachers', '/payments', '/charges', '/trials', '/pricing', '/school-hours', '/closures', '/settings', '/audit', '/system']) {
     await page.goto(`${MANAGE}${path}`);
     await page.locator('main h1').first().waitFor();
     await page.waitForTimeout(500);
     expect(await audit(page), path).toEqual([]);
   }
+  // 講師の詳細（プロフィールと写真: TC-06）
+  await page.goto(`${MANAGE}/teachers`);
+  await page.getByRole('link', { name: 'プロフィール' }).first().click();
+  await page.getByRole('button', { name: 'プロフィールを保存' }).waitFor();
+  await page.waitForTimeout(400);
+  expect(await audit(page), '/teachers/:id').toEqual([]);
 });
 
 test('UI-02 強い警告は太い黒枠・警告アイコン・太字', async ({ page, context }) => {
@@ -254,7 +267,7 @@ test('MB-02 生徒のトップの主な操作は1つ', async ({ page }) => {
   expect(await page.locator('main .btn-primary:visible').count()).toBe(1);
 });
 
-test('MB-06 / PW-03 ホーム画面への追加は、未追加のときだけ案内し、閉じたら出さない', async ({ page, browser }) => {
+test('MB-06 / PW-03 ホーム画面への追加は、在籍中で未追加のときだけ案内し、閉じたら出さない', async ({ page, browser }) => {
   await login(page, STUDENT, 'parent@example.test');
   await expect(page.getByText('ホーム画面に追加すると、アプリのようにすぐ開けます。')).toBeVisible();
   await expect(page.getByText('iPhone では、ホーム画面から初めて開いたときにもう一度ログインが必要です。')).toBeVisible();
@@ -274,6 +287,20 @@ test('MB-06 / PW-03 ホーム画面への追加は、未追加のときだけ案
   await p.locator('.big-number').waitFor();
   await expect(p.getByText('ホーム画面に追加すると')).toHaveCount(0);
   await ctx.close();
+
+  // 入会前（入会手続き中）は案内しない。ほかのテストで入会が進んでも左右されないよう、状態だけを差し替える
+  const ctx2 = await browser.newContext({ ...test.info().project.use });
+  const q = await ctx2.newPage();
+  await q.route('**/api/students/*/home', async (route) => {
+    const res = await route.fetch();
+    const json = await res.json();
+    json.student.status = 'enrolling';
+    await route.fulfill({ response: res, json });
+  });
+  await login(q, STUDENT, 'parent@example.test');
+  await q.getByRole('link', { name: '入会手続きへ進む' }).waitFor();
+  await expect(q.getByText('ホーム画面に追加すると')).toHaveCount(0);
+  await ctx2.close();
 });
 
 test('UI-06 3つの画面で同じ部品とスタイルを使う', async () => {

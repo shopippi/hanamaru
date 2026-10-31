@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  customType,
   index,
   integer,
   jsonb,
@@ -134,10 +135,29 @@ export const teachers = pgTable('teachers', {
   id: id(),
   accountId: uuid('account_id').notNull().unique().references(() => accounts.id),
   name: text('name').notNull(),
-  /** プロフィールのデータファイル（TC-06）のキー */
-  profileSlug: text('profile_slug').notNull().unique(),
+  /** 以前のプロフィールのデータファイルのキー。取り込み（importTeacherProfiles）にだけ使う */
+  profileSlug: text('profile_slug').unique(),
   active: boolean('active').notNull().default(true),
+  /** 生徒に見せるプロフィール（TC-05、TC-06）。管理画面と講師本人が編集する */
+  instruments: text('instruments').array().notNull().default(sql`'{}'::text[]`),
+  career: text('career').notNull().default(''),
+  message: text('message').notNull().default(''),
   createdAt: createdAt(),
+});
+
+const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
+  dataType: () => 'bytea',
+  fromDriver: (v) => Buffer.from(v),
+});
+
+/** 講師の写真（TC-06）。講師の行を軽く保つため別にする */
+export const teacherPhotos = pgTable('teacher_photos', {
+  teacherId: uuid('teacher_id')
+    .primaryKey()
+    .references(() => teachers.id, { onDelete: 'cascade' }),
+  contentType: text('content_type').notNull(),
+  data: bytea('data').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
 });
 
 /** 担当講師（TC-01）。行を消すと担当を外す（TC-04: 既存の予約は残る） */
@@ -167,6 +187,8 @@ export const lessonTypes = pgTable('lesson_types', {
   durationMinutes: integer('duration_minutes').notNull(),
   /** 個人は1 */
   capacity: integer('capacity').notNull().default(1),
+  /** オンラインのレッスン（RS-09）。教室の受付時間に関係なく、講師の空き時間で予約できる */
+  online: boolean('online').notNull().default(false),
   active: boolean('active').notNull().default(true),
 });
 
@@ -493,8 +515,26 @@ export const notifications = pgTable('notifications', {
   body: text('body').notNull(),
   status: notificationStatusEnum('status').notNull().default('pending'),
   error: text('error'),
+  /** 送ろうとした回数（OP-06）。失敗したら nextRetryAt に送り直す。null は送り直さない */
+  attempts: integer('attempts').notNull().default(0),
+  nextRetryAt: ts('next_retry_at'),
   createdAt: createdAt(),
   sentAt: ts('sent_at'),
+});
+
+/**
+ * 定期処理と Stripe の通知の受け取りの、最後の実行結果（OP-05）。
+ * 失敗が続いたら管理者にメールで知らせ、直ったら「復旧しました」と知らせる
+ */
+export const jobRuns = pgTable('job_runs', {
+  name: text('name').primaryKey(),
+  lastStartedAt: ts('last_started_at'),
+  lastSucceededAt: ts('last_succeeded_at'),
+  lastFailedAt: ts('last_failed_at'),
+  lastError: text('last_error'),
+  consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+  /** 最後に管理者へ知らせた時刻。同じ処理の失敗は1日に1回までしか知らせない */
+  lastAlertAt: ts('last_alert_at'),
 });
 
 /** 管理者の操作記録（OP-03） */
@@ -539,3 +579,24 @@ export const trialRequests = pgTable('trial_requests', {
   status: trialStatusEnum('status').notNull().default('new'),
   createdAt: createdAt(),
 });
+
+/**
+ * 講師へのレビュー（RV-01〜）。講師の名前をキーに残し、生徒を消しても消えない（生徒の名前は書いた時点の写しを持つ）。
+ * teacher_id は講師の画面で探すための参照で、講師を消しても名前で残る
+ */
+export const reviews = pgTable(
+  'reviews',
+  {
+    id: id(),
+    teacherName: text('teacher_name').notNull(),
+    teacherId: uuid('teacher_id').references(() => teachers.id, { onDelete: 'set null' }),
+    studentId: uuid('student_id').references(() => students.id, { onDelete: 'set null' }),
+    authorName: text('author_name').notNull(),
+    body: text('body').notNull(),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+    /** 講師が確認した日時。null は未確認（書き直すと null に戻る） */
+    checkedAt: ts('checked_at'),
+  },
+  (t) => [index('reviews_teacher_name_idx').on(t.teacherName), index('reviews_student_idx').on(t.studentId)],
+);

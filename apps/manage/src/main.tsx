@@ -10,10 +10,11 @@ import { Dashboard } from './pages/Dashboard.js';
 import { Login } from './pages/Login.js';
 import { Audit, Closures, SettingsPage, Trials } from './pages/Misc.js';
 import { Charges, Payments, Pricing } from './pages/Money.js';
+import { SystemPage } from './pages/System.js';
 import { StudentDetail } from './pages/StudentDetail.js';
 import { SchoolHours } from './pages/SchoolHours.js';
 import { Students } from './pages/Students.js';
-import { TeacherAvailability, Teachers } from './pages/Teachers.js';
+import { TeacherAvailability, TeacherDetail, Teachers } from './pages/Teachers.js';
 
 // 管理者の画面（manage.hanamarumusic.com）。最初にダッシュボードを出す（3.10）
 
@@ -31,6 +32,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/students" element={<Students />} />
             <Route path="/students/:id" element={<StudentDetail />} />
             <Route path="/teachers" element={<Teachers />} />
+            <Route path="/teachers/:id" element={<TeacherDetail />} />
             <Route path="/teachers/:id/availability" element={<TeacherAvailability />} />
             <Route path="/payments" element={<Payments />} />
             <Route path="/charges" element={<Charges />} />
@@ -40,6 +42,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/closures" element={<Closures />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/audit" element={<Audit />} />
+            <Route path="/system" element={<SystemPage />} />
           </Route>
         </Routes>
       </ToastProvider>

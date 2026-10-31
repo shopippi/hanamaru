@@ -28,7 +28,7 @@ export async function setup(now = jst('2026-10-20', '10:00')) {
   const ctx: Ctx = {
     db,
     now: () => clock.now,
-    notifier: new NotificationService(db, [new EmailChannel(mail)]),
+    notifier: new NotificationService(db, [new EmailChannel(mail)], () => clock.now),
     payments: gateway,
     urls: {
       student: 'https://student.example.test',

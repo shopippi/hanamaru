@@ -351,7 +351,7 @@ export function Pricing() {
                             )}
                           </span>
                           <span className="list-meta num">
-                            入会金 {fmtYen(p.admissionFee)}＋{p.lessonCount}回 {fmtYen(p.lessonsPrice)}＝{fmtYen(p.admissionFee + p.lessonsPrice)}
+                            {p.admissionFee > 0 ? `入会金 ${fmtYen(p.admissionFee)}＋${p.lessonCount}回 ${fmtYen(p.lessonsPrice)}＝${fmtYen(p.admissionFee + p.lessonsPrice)}` : `${p.lessonCount}回 ${fmtYen(p.lessonsPrice)}（入会金なし）`}
                           </span>
                         </span>
                         <Button variant="quiet" onClick={() => void run.run(() => api.patch(`/packages/${p.id}`, { ...p, active: !p.active }), p.active ? '入会画面に出さないようにしました' : '入会画面に出しました')}>
@@ -364,8 +364,8 @@ export function Pricing() {
                 <div className="panel-body panel-divider stack">
                   <h3>入会セットを追加</h3>
                   <div className="grid-2">
-                    <TextField label="名前" hint="例: 入会金＋4回" value={pkg.name} onChange={(e) => setPkg({ ...pkg, name: e.target.value })} />
-                    <TextField label="入会金" inputMode="numeric" value={pkg.admissionFee} onChange={(e) => setPkg({ ...pkg, admissionFee: e.target.value })} />
+                    <TextField label="名前" hint="例: 1h×月3回（最初の月）" value={pkg.name} onChange={(e) => setPkg({ ...pkg, name: e.target.value })} />
+                    <TextField label="入会金" hint="なければ 0" inputMode="numeric" value={pkg.admissionFee} onChange={(e) => setPkg({ ...pkg, admissionFee: e.target.value })} />
                     <TextField label="含めるレッスン回数" inputMode="numeric" value={pkg.lessonCount} onChange={(e) => setPkg({ ...pkg, lessonCount: e.target.value })} />
                     <TextField label="レッスン分の価格" inputMode="numeric" value={pkg.lessonsPrice} onChange={(e) => setPkg({ ...pkg, lessonsPrice: e.target.value })} />
                   </div>

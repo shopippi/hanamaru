@@ -271,3 +271,8 @@ export function LogoMark({ size = 28 }: { size?: number }) {
     </svg>
   );
 }
+export const IconPulse = (p: P) => (
+  <Svg {...p}>
+    <path d="M3 12h4l2.5-6 5 12 2.5-6h4" />
+  </Svg>
+);

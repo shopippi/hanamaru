@@ -12,6 +12,8 @@ import { ConsoleEmailTransport, EmailChannel, NotificationService } from './doma
 import type { CheckoutRequest, PaymentEvent, PaymentGateway } from './domain/payment-gateway.js';
 import { handlePaymentEvent, createCourse, savePackage } from './domain/billing.js';
 import { runJobs } from './domain/jobs.js';
+import { importTeacherProfiles } from './domain/teacher-profiles.js';
+import { fileURLToPath } from 'node:url';
 import { StaticCaptcha } from './http/captcha.js';
 import { createApp } from './http/index.js';
 import { hashPassword, totpCode } from './lib/crypto.js';
@@ -95,32 +97,59 @@ async function seed(db: Db, ctx: Ctx) {
     if (wd !== 0) hours.push({ date: d, startTime: '10:00', endTime: wd === 6 ? '18:00' : '21:00' });
   }
   await db.insert(schema.schoolHours).values(hours);
-  const [piano] = await db.insert(schema.lessonTypes).values({ name: '個人 45分', kind: 'private', durationMinutes: 45, capacity: 1 }).returning();
-  const [group] = await db.insert(schema.lessonTypes).values({ name: 'グループ 60分', kind: 'group', durationMinutes: 60, capacity: 4 }).returning();
+  // 教室の実際のレッスン（見本のデータ。本番では管理画面で登録する）
+  const [piano] = await db
+    .insert(schema.lessonTypes)
+    .values({ name: 'ポピュラーピアノ（対面）60分', kind: 'private', durationMinutes: 60, capacity: 1 })
+    .returning();
+  const [pianoOnline] = await db
+    .insert(schema.lessonTypes)
+    .values({ name: 'ポピュラーピアノ（オンライン）60分', kind: 'private', durationMinutes: 60, capacity: 1, online: true })
+    .returning();
+  const [drum] = await db.insert(schema.lessonTypes).values({ name: 'ドラム（対面）60分', kind: 'private', durationMinutes: 60, capacity: 1 }).returning();
+  const [trial] = await db.insert(schema.lessonTypes).values({ name: '体験レッスン 30分', kind: 'private', durationMinutes: 30, capacity: 1 }).returning();
   const [room1] = await db.insert(schema.rooms).values({ name: 'レッスン室1' }).returning();
 
   const mkTeacher = async (slug: string, name: string, email: string) => {
     const a = await mkAccount('teacher', email, name);
     return (await db.insert(schema.teachers).values({ accountId: a.id, name, profileSlug: slug }).returning())[0]!;
   };
-  const tA = await mkTeacher('sample-piano', '見本 花子', 'teacher@example.test');
+  const tA = await mkTeacher('matsuda', '松田 悠義', 'teacher@example.test');
+  // 2人目は講師の切り替え（TC-02）を試すための見本
   const tB = await mkTeacher('sample-guitar', '見本 次郎', 'teacher2@example.test');
+  // 見本のプロフィールと写真を、以前のデータファイルから取り込む（TC-06。本番も同じ取り込みを使える）
+  const dataDir = fileURLToPath(new URL('../data/', import.meta.url));
+  await importTeacherProfiles(db, `${dataDir}teacher-profiles.json`, (photo) => `${dataDir}${photo}`, ctx.now());
   for (const wd of [1, 2, 3, 4, 5]) {
-    await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: wd, startTime: '15:00', endTime: '19:30', lessonTypeId: piano!.id, roomId: room1!.id });
+    await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: wd, startTime: '15:00', endTime: '20:00', lessonTypeId: piano!.id, roomId: room1!.id });
+    await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: wd, startTime: '20:00', endTime: '22:00', lessonTypeId: pianoOnline!.id });
   }
-  await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: 6, startTime: '10:00', endTime: '12:00', lessonTypeId: group!.id });
-  await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: 6, startTime: '13:00', endTime: '14:30', lessonTypeId: piano!.id, forTrial: true });
+  await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: 6, startTime: '10:00', endTime: '12:00', lessonTypeId: drum!.id, roomId: room1!.id });
+  await db.insert(schema.availabilityRules).values({ teacherId: tA.id, weekday: 6, startTime: '13:00', endTime: '14:30', lessonTypeId: trial!.id, forTrial: true });
   for (const wd of [2, 4]) {
-    await db.insert(schema.availabilityRules).values({ teacherId: tB.id, weekday: wd, startTime: '16:00', endTime: '20:00', lessonTypeId: piano!.id });
+    await db.insert(schema.availabilityRules).values({ teacherId: tB.id, weekday: wd, startTime: '16:00', endTime: '20:00', lessonTypeId: drum!.id });
   }
 
+  // 料金表（レギュラーレッスン、サブスク月額制）。入会金はなし。5回目からは +5,000円で1回ずつ
   const admin = { kind: 'system' as const };
-  const course = await createCourse(ctx, admin, { name: '月4回コース', lessonsPerMonth: 4, amount: 14300 });
-  await createCourse(ctx, admin, { name: '月2回コース', lessonsPerMonth: 2, amount: 7700 });
-  await savePackage(ctx, admin, null, { name: '入会金＋4回', admissionFee: 5500, lessonCount: 4, lessonsPrice: 14300, sortOrder: 1 });
-  await savePackage(ctx, admin, null, { name: '入会金＋2回', admissionFee: 5500, lessonCount: 2, lessonsPrice: 7700, sortOrder: 2 });
+  const plans = [
+    { n: 1, amount: 6000 },
+    { n: 2, amount: 11000 },
+    { n: 3, amount: 15000 },
+    { n: 4, amount: 20000 },
+    { n: 5, amount: 25000 },
+  ];
+  const courseOf = new Map<number, Awaited<ReturnType<typeof createCourse>>>();
+  for (const p of plans) courseOf.set(p.n, await createCourse(ctx, admin, { name: `1h×月${p.n}回コース`, lessonsPerMonth: p.n, amount: p.amount }));
+  // 入会のときは最初の月の月謝だけを払う（4回を最初に出す）
+  for (const [i, n] of [4, 3, 2, 1, 5].entries()) {
+    const p = plans.find((x) => x.n === n)!;
+    await savePackage(ctx, admin, null, { name: `1h×月${n}回（最初の月）`, admissionFee: 0, lessonCount: n, lessonsPrice: p.amount, sortOrder: i + 1 });
+  }
+  const course = courseOf.get(4)!;
 
-  const parent = await mkAccount('student', 'parent@example.test', '山田 花子');
+  // 見本の生徒は2人。家庭（ログイン）は別々なので、ほかの生徒の情報は見えない（5.2）
+  const parent = await mkAccount('student', 'parent@example.test', '山田 はな子');
   const mkStudent = async (name: string, values: Partial<typeof schema.students.$inferInsert>, teacherIds: string[], credits = 0) => {
     const [s] = await db
       .insert(schema.students)
@@ -130,10 +159,11 @@ async function seed(db: Db, ctx: Ctx) {
     if (credits) await db.insert(schema.creditLedger).values({ studentId: s!.id, month, delta: credits, reason: 'grant_monthly', note: '見本' });
     return s!;
   };
-  await mkStudent('山田 太郎', { phone: '090-0000-0001', address: '東京都千代田区1-1', teacherNote: '左手の練習を重点的に' }, [tA.id, tB.id], 4);
-  await mkStudent('山田 さくら', { phone: '090-0000-0002' }, [tA.id], 2);
-  const solo = await mkAccount('student', 'new@example.test', '佐藤 一郎');
-  await db.insert(schema.students).values({ accountId: solo.id, name: '佐藤 一郎', status: 'enrolling', courseId: course.id });
+  await mkStudent('山田 はな太郎', { phone: '090-0000-0001', address: '東京都千代田区1-1', teacherNote: '左手の練習を重点的に' }, [tA.id, tB.id], 4);
+  // 入会手続き中の見本（入会の流れを試す）
+  const maruko = await mkAccount('student', 'maruko@example.test', '田中 まる子');
+  const [m] = await db.insert(schema.students).values({ accountId: maruko.id, name: '田中 まる子', status: 'enrolling', courseId: course.id }).returning();
+  await db.insert(schema.studentTeachers).values({ studentId: m!.id, teacherId: tA.id });
 }
 
 async function openDb(): Promise<Db> {
@@ -156,6 +186,8 @@ const db = await openDb();
 let clockOffsetMs = 0;
 const mails: { to: string; subject: string; text: string; at: string }[] = [];
 const console_ = new ConsoleEmailTransport();
+/** 開発用: true にするとメールの送信に失敗する（システムの状態の画面と送り直しを試すため） */
+let mailFailing = false;
 
 const gateway = new DevGateway();
 const ctx: Ctx = {
@@ -164,11 +196,12 @@ const ctx: Ctx = {
   notifier: new NotificationService(db, [
     new EmailChannel({
       send: async (m) => {
+        if (mailFailing) throw new Error('メールを送れませんでした（開発用の失敗）');
         mails.push({ ...m, at: new Date(Date.now() + clockOffsetMs).toISOString() });
         await console_.send(m);
       },
     }),
-  ]),
+  ], () => new Date(Date.now() + clockOffsetMs)),
   payments: gateway,
   urls: { student: `http://${HOST}:5173`, staff: `http://${HOST}:5174`, manage: `http://${HOST}:5175` },
 };
@@ -219,6 +252,11 @@ dev.get('/totp', async (c) => {
   await db.update(schema.accounts).set({ totpLastStep: null }).where(eq(schema.accounts.email, 'admin@example.test'));
   return c.text(totpCode(ADMIN_TOTP_SECRET, ctx.now()));
 });
+dev.post('/mail-failure', async (c) => {
+  const { failing } = (await c.req.json()) as { failing: boolean };
+  mailFailing = !!failing;
+  return c.json({ failing: mailFailing });
+});
 dev.post('/jobs', async (c) => c.json(await runJobs(ctx)));
 // 時計を進める（月末・月初の処理の確認用）。{ "at": "2026-11-01T00:10:00+09:00" }。null で元に戻す
 dev.post('/clock', async (c) => {
@@ -232,6 +270,6 @@ app.route('/dev', dev);
 
 serve({ fetch: app.fetch, port: PORT }, () => {
   console.log(`dev api on ${API_ORIGIN}`);
-  console.log('ログイン: 生徒 parent@example.test / 講師 teacher@example.test / 管理 admin@example.test（パスワードはすべて password）');
+  console.log('ログイン: 生徒 parent@example.test（入会手続き中は maruko@example.test） / 講師 teacher@example.test / 管理 admin@example.test（パスワードはすべて password）');
   console.log(`管理者の確認コード: ${API_ORIGIN}/dev/totp`);
 });

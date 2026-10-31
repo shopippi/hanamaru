@@ -1,9 +1,13 @@
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
+import { randomBytes } from 'node:crypto';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { authenticate, type Authenticated } from '../domain/auth.js';
 import type { Actor, Ctx, Role } from '../domain/context.js';
 import { DomainError } from '../domain/errors.js';
+import { healthy } from '../domain/system.js';
+import type { Db } from '../db/client.js';
 import type { CaptchaVerifier } from './captcha.js';
 
 // HTTP の入口。業務ルールは domain/ にあり、ここは入出力の変換と認証だけを行う（2章の4、6）
@@ -37,8 +41,10 @@ export function errorResponse(c: Context, e: unknown) {
   if (e instanceof DomainError) {
     return c.json({ error: e.message, code: e.code, details: e.code === 'validation' || e.code === 'conflict' ? e.details : undefined }, STATUS[e.code]);
   }
-  console.error(e);
-  return c.json({ error: 'エラーが発生しました。時間をおいてもう一度お試しください', code: 'internal' }, 500);
+  // 想定外のエラー（OP-09）。短いエラー番号を画面に出し、同じ番号でログに残す。問い合わせのときに番号で探せる
+  const errorId = randomBytes(4).toString('hex');
+  console.error(`[error ${errorId}] ${c.req.method} ${c.req.path}`, e);
+  return c.json({ error: `エラーが発生しました。時間をおいてもう一度お試しください（エラー番号: ${errorId}）`, code: 'internal', errorId }, 500);
 }
 
 /** JSON の本文をそのまま読む（検証は domain 側で行う） */
@@ -118,17 +124,35 @@ const jsonOnly: MiddlewareHandler = async (c, next) => {
   await next();
 };
 
-export function createBaseApp(): Hono<Env> {
+export function createBaseApp(db?: Db): Hono<Env> {
   const app = new Hono<Env>();
   app.onError((e, c) => errorResponse(c, e));
   app.use('/api/*', async (c, next) => {
     if (c.req.path.startsWith('/api/stripe/')) return next(); // Stripe の通知は署名で検証する
     return jsonOnly(c, next);
   });
+  // 送られてくる本文の大きさの上限。講師の写真だけは大きめ（設定の上限 20MB を base64 にした大きさ）まで受け付ける
+  const tooLarge = (c: Context) => c.json({ error: '送信する内容が大きすぎます', code: 'validation' }, 413);
+  const normalLimit = bodyLimit({ maxSize: 1024 * 1024, onError: tooLarge });
+  const photoLimit = bodyLimit({ maxSize: 30 * 1024 * 1024, onError: tooLarge });
+  app.use('/api/*', (c, next) => (c.req.path.endsWith('/photo') ? photoLimit(c, next) : normalLimit(c, next)));
+  // ヘルスチェック（OP-08）。データベースに問い合わせられなければ 503。外部の死活監視からも使う
+  app.get('/api/health', async (c) => {
+    if (db && !(await healthy(db))) return c.json({ ok: false, error: 'database' }, 503);
+    return c.json({ ok: true });
+  });
   app.use('/api/*', async (c, next) => {
     await next();
-    c.header('Cache-Control', 'no-store');
+    // 写真など、返す側でキャッシュの指定をしたものはそのまま
+    if (!c.res.headers.has('Cache-Control')) c.header('Cache-Control', 'no-store');
   });
-  app.get('/api/health', (c) => c.json({ ok: true }));
   return app;
+}
+
+/** 講師の写真を返す（TC-06）。URL に更新日時が付くので、ブラウザに1日置いてよい。本人のログインが要るので private */
+export function photoResponse(c: Context, photo: { contentType: string; data: Buffer; updatedAt: Date }) {
+  const etag = `"${photo.updatedAt.getTime()}"`;
+  const headers = { ETag: etag, 'Cache-Control': 'private, max-age=86400' };
+  if (c.req.header('if-none-match') === etag) return c.body(null, 304, headers);
+  return c.body(new Uint8Array(photo.data), 200, { ...headers, 'Content-Type': photo.contentType, 'X-Content-Type-Options': 'nosniff' });
 }

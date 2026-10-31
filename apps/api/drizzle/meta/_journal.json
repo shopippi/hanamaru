@@ -36,6 +36,34 @@
       "when": 1792486806083,
       "tag": "0004_school_calendar",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792491483268,
+      "tag": "0005_online_lessons",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792494140865,
+      "tag": "0006_reviews",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792495748503,
+      "tag": "0007_teacher_profiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792500803028,
+      "tag": "0008_system_health",
+      "breakpoints": true
     }
   ]
 }

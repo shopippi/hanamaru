@@ -265,7 +265,7 @@ describe('RS-04 / RS-05 キャンセル・変更の締切', () => {
 
   test('締切は予約・変更・キャンセルごとに設定できる', async () => {
     const f = await setup();
-    await updateSettings(f.db, { cancelDeadlineHours: 2 }, null);
+    await updateSettings(f.db, { cancelDeadlineMode: 'hoursBefore', cancelDeadlineHours: 2 }, null);
     const { student, actor } = await f.mkStudent('太郎', { credits: 4 });
     const r = await bookAsStudent(f.ctx, actor, {
       studentId: student.id,

@@ -98,8 +98,8 @@ test('ST-01 / AU-03 / PY-01〜05 / SR-02 / OP-04 / MB-03 / UI-12 管理者が登
   await admin.getByLabel('生徒の名前').fill(NAME);
   await admin.getByLabel('ログインメール（保護者または本人）').fill(EMAIL);
   await admin.getByLabel('電話番号').fill('090-1111-2222');
-  await admin.getByLabel('月額コース').selectOption({ label: '月4回コース' });
-  await admin.getByLabel('見本 花子').check();
+  await admin.getByLabel('月額コース').selectOption({ label: '1h×月4回コース' });
+  await admin.getByLabel('松田 悠義').check();
   await admin.getByRole('button', { name: '登録して招待メールを送る' }).click();
   await expect(admin.getByRole('heading', { name: NAME })).toBeVisible();
 
@@ -126,7 +126,7 @@ test('ST-01 / AU-03 / PY-01〜05 / SR-02 / OP-04 / MB-03 / UI-12 管理者が登
   await s.getByRole('link', { name: '入会手続きへ進む' }).click();
   await expect(s.getByText('（税込）').first()).toBeVisible(); // MB-03
   await s.getByLabel('契約の内容と利用規約に同意します').check();
-  await s.getByRole('button', { name: /を支払う/ }).click();
+  await s.getByRole('button', { name: '申し込む', exact: true }).click();
   await s.getByRole('button', { name: 'テストで支払う' }).click();
   await expect(s).toHaveURL(/checkout=done/);
   await expect(s.locator('.big-number')).toHaveText(/^4/);
@@ -267,10 +267,10 @@ test('RS-07 管理者が毎週の繰り返し予約を作ると、各回が生�
   await adminNav(a, '予約');
   await a.getByRole('button', { name: '繰り返し予約' }).click();
   await a.getByLabel('生徒', { exact: true }).selectOption({ label: NAME });
-  await a.getByLabel('担当講師').selectOption({ label: '見本 花子' });
-  await a.getByLabel('レッスン種別').selectOption({ label: '個人 45分' });
+  await a.getByLabel('担当講師').selectOption({ label: '松田 悠義' });
+  await a.getByLabel('レッスン種別').selectOption({ label: 'ポピュラーピアノ（対面）60分' });
   await a.getByLabel('曜日').selectOption({ label: '月曜日' });
-  await a.getByLabel('開始時刻').fill('18:45');
+  await a.getByLabel('開始時刻').fill('18:00');
   await a.getByRole('button', { name: '繰り返し予約を作る' }).click();
   await expect(a.getByText(/回分を予約しました/)).toBeVisible();
   // 回数が足りない月は警告が出る
@@ -279,7 +279,7 @@ test('RS-07 管理者が毎週の繰り返し予約を作ると、各回が生�
 
   const s = await studentPage(browser);
   await s.getByRole('link', { name: '予約一覧' }).click();
-  await expect(s.getByText(/18:45〜19:30/).first()).toBeVisible();
+  await expect(s.getByText(/18:00〜19:00/).first()).toBeVisible();
   await s.context().close();
 });
 
@@ -385,7 +385,7 @@ test('TR-01 体験の申込に、管理者が枠を押さえて連絡する', as
   await adminNav(a, '体験');
   const item = a.locator('li', { hasText: '体験 申込' });
   await item.getByRole('button', { name: '枠を押さえる' }).click();
-  await item.getByLabel('講師').selectOption({ label: '見本 花子' });
+  await item.getByLabel('講師').selectOption({ label: '松田 悠義' });
   await item.getByLabel('日付').fill(date);
   await item.locator('.slot-grid button').first().click();
   await expect(a.getByText('予約しました。申込者に確定のメールを送りました')).toBeVisible();
@@ -449,9 +449,9 @@ test('DB-02 ダッシュボードの予約は講師別・教室別に切り替�
   await a.getByRole('button', { name: '教室別' }).click();
   // 教室別では部屋の名前（指定がなければ「教室の指定なし」）でまとめる
   await expect(a.getByRole('heading', { name: /^(レッスン室1|教室の指定なし)\s*\d+件$/ }).first()).toBeVisible();
-  await expect(a.getByRole('heading', { name: /^見本 花子\s*\d+件$/ })).toHaveCount(0);
+  await expect(a.getByRole('heading', { name: /^松田 悠義\s*\d+件$/ })).toHaveCount(0);
   await a.getByRole('button', { name: '講師別' }).click();
-  await expect(a.getByRole('heading', { name: /^見本 花子\s*\d+件$/ })).toBeVisible();
+  await expect(a.getByRole('heading', { name: /^松田 悠義\s*\d+件$/ })).toBeVisible();
   await a.context().close();
 });
 
@@ -468,9 +468,9 @@ test('3.4 / PY-07 / PY-09 / PY-10 月が変わると請求が並び、猶予を�
     await a.getByRole('heading', { name: '入金状況' }).waitFor();
     await a.getByLabel('対象月').fill(ym);
     await a.getByLabel('未払い・決済失敗だけ').check();
-    await expect(a.getByRole('cell').getByRole('link', { name: '山田 太郎', exact: true })).toBeVisible();
+    await expect(a.getByRole('cell').getByRole('link', { name: '山田 はな太郎', exact: true })).toBeVisible();
     // 前月の余った回数は失効している（PY-07、繰越なしの設定）
-    await a.getByRole('cell').getByRole('link', { name: '山田 太郎', exact: true }).click();
+    await a.getByRole('cell').getByRole('link', { name: '山田 はな太郎', exact: true }).click();
     await a.getByText(/回数の履歴/).click();
     await expect(a.getByRole('cell', { name: '失効' }).first()).toBeVisible();
 
@@ -486,8 +486,8 @@ test('3.4 / PY-07 / PY-09 / PY-10 月が変わると請求が並び、猶予を�
     await adminNav(a, '入金');
     await a.getByRole('heading', { name: '入金状況' }).waitFor();
     await a.getByLabel('対象月').fill(ym);
-    await a.locator('tr', { hasText: '山田 太郎' }).getByRole('button', { name: '現金で入金済み' }).click();
-    await expect(a.getByText('山田 太郎さんを入金済みにしました')).toBeVisible();
+    await a.locator('tr', { hasText: '山田 はな太郎' }).getByRole('button', { name: '現金で入金済み' }).click();
+    await expect(a.getByText('山田 はな太郎さんを入金済みにしました')).toBeVisible();
     await p.reload();
     await expect(p.getByText('お支払いが確認できていない')).toHaveCount(0);
     await adminNav(a, '操作記録');
@@ -559,4 +559,137 @@ test('AV-06 / AV-08 教室の受付日をカレンダーで休みにすると、
   await expect(s.locator(`.date-chip[aria-label^="${dayLabel}"]`)).toBeVisible();
   await a.context().close();
   await s.context().close();
+});
+
+test('ST-04 同じ保護者のお子さま（兄弟）は、1つのログインで切り替えられる', async ({ browser }) => {
+  // 見本の家庭はそれぞれ1人なので、ここで兄弟を登録する（同じログインメールで登録すると兄弟として紐付く）
+  const admin = await adminPage(browser);
+  await adminNav(admin, '生徒');
+  await admin.getByRole('button', { name: '生徒を登録' }).click();
+  await admin.getByLabel('生徒の名前').fill('通し 次郎');
+  await admin.getByLabel('ログインメール（保護者または本人）').fill(EMAIL);
+  await admin.getByRole('button', { name: '登録して招待メールを送る' }).click();
+  await expect(admin.getByRole('heading', { name: '通し 次郎' })).toBeVisible();
+  await admin.context().close();
+
+  const s = await studentPage(browser);
+  await s.getByRole('button', { name: '通し 次郎' }).click();
+  await expect(s.getByRole('button', { name: '通し 次郎' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(s.getByLabel('表示中の生徒')).toHaveText('通し 次郎');
+  await s.getByRole('button', { name: NAME }).click();
+  await expect(s.getByLabel('表示中の生徒')).toHaveText(NAME);
+  await s.context().close();
+});
+
+test('RV-01〜RV-05 生徒が講師へのレビューを書き、講師は未確認の印を見て確認する。直すと未確認に戻る', async ({ browser }) => {
+  const s = await studentPage(browser);
+  await s.getByRole('link', { name: '講師' }).click();
+  await s.getByRole('button', { name: /松田 悠義/ }).click();
+  const region = s.getByRole('region', { name: '松田 悠義のプロフィール' });
+  await region.getByRole('button', { name: 'レビューを書く' }).click();
+  await region.getByLabel('レビュー', { exact: true }).fill('コード奏法がわかりやすくて、1曲弾けるようになりました。');
+  await region.getByRole('button', { name: '投稿する' }).click();
+  await expect(s.getByText('レビューを投稿しました')).toBeVisible();
+  await expect(region.getByText('あなたのレビュー（1件）')).toBeVisible();
+
+  // 講師: 未確認の印（赤い点）と、誰からか
+  const t = await open(browser);
+  await login(t, STAFF, 'teacher@example.test');
+  await expect(t.getByRole('link', { name: /レビュー.*未確認 \d+件/ })).toBeVisible();
+  await t.getByRole('link', { name: /^レビュー/ }).click();
+  const item = t.locator('.review-item', { hasText: 'コード奏法がわかりやすくて' });
+  await expect(item.getByText(NAME)).toBeVisible();
+  await expect(item.locator('.unread-dot')).toBeVisible();
+  await item.getByRole('button', { name: '確認した' }).click();
+  await expect(item.locator('.unread-dot')).toHaveCount(0);
+
+  // 生徒が直すと、講師には未確認として戻る
+  await region.getByText('全文を見る').click();
+  await region.getByRole('button', { name: '編集' }).click();
+  await region.getByLabel('レビュー', { exact: true }).fill('コード奏法がわかりやすくて、2曲目にも挑戦しています。');
+  await region.getByRole('button', { name: '保存する' }).click();
+  await expect(s.getByText('レビューを直しました')).toBeVisible();
+  await t.reload();
+  const edited = t.locator('.review-item', { hasText: '2曲目にも挑戦しています' });
+  await expect(edited.getByText('編集済み')).toBeVisible();
+  await expect(edited.locator('.unread-dot')).toBeVisible();
+  await t.getByRole('button', { name: 'すべて確認済みにする' }).click();
+  await expect(t.locator('.unread-dot')).toHaveCount(0);
+
+  // 生徒が消すと、講師にも出なくなる
+  await region.getByText('全文を見る').click();
+  await region.getByRole('button', { name: '削除' }).click();
+  await s.getByRole('dialog').getByRole('button', { name: '消す' }).click();
+  await expect(s.getByText('レビューを消しました')).toBeVisible();
+  await t.reload();
+  await expect(t.getByText('2曲目にも挑戦しています')).toHaveCount(0);
+  await s.context().close();
+  await t.context().close();
+});
+
+test('TC-06 / TC-07 管理者が講師を登録し、プロフィールと写真・空き時間を入れて生徒の担当にすると、生徒の講師ページと予約に出る', async ({ browser }) => {
+  const TEACHER = '新人 講師';
+  const teacherEmail = `teacher-${Date.now()}@example.test`;
+  // 1×1 の PNG（画面で正方形の JPEG にして送る）
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+
+  const a = await adminPage(browser);
+  await adminNav(a, '講師');
+  await a.getByRole('button', { name: '講師を登録' }).click();
+  await a.getByLabel('名前').fill(TEACHER);
+  await a.getByLabel('メールアドレス').fill(teacherEmail);
+  await a.getByRole('button', { name: '登録して招待メールを送る' }).click();
+  // 登録したら講師の詳細へ移り、次にすることを出す
+  await expect(a.getByRole('heading', { name: TEACHER, level: 1 })).toBeVisible();
+  await expect(a.getByRole('heading', { name: '次にすること' })).toBeVisible();
+  expect((await mails()).some((m) => m.to === teacherEmail && m.subject.includes('ご登録'))).toBe(true);
+
+  // プロフィールと写真
+  await a.getByLabel('担当の楽器').fill('サックス、フルート');
+  await a.getByLabel('ひとこと').fill('一緒に楽しく吹きましょう');
+  await a.getByRole('button', { name: 'プロフィールを保存' }).click();
+  await expect(a.getByText('プロフィールを保存しました')).toBeVisible();
+  await a.locator('input[type=file]').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: png });
+  await expect(a.getByText('写真を保存しました')).toBeVisible();
+  await expect(a.getByRole('img', { name: `${TEACHER}の写真` })).toBeVisible();
+
+  // 空き時間: 3日後以降の平日を1日だけ入れる
+  const day = new Date(Date.now() + 9 * 3600_000);
+  day.setUTCDate(day.getUTCDate() + 3);
+  while (day.getUTCDay() === 0 || day.getUTCDay() === 6) day.setUTCDate(day.getUTCDate() + 1);
+  const date = day.toISOString().slice(0, 10);
+  await a.getByRole('link', { name: '空き時間' }).first().click();
+  await openCalendarDay(a, date);
+  await a.getByRole('button', { name: '時間帯を足す' }).click();
+  await a.getByLabel('時間帯1のレッスン種別').selectOption({ label: 'ポピュラーピアノ（対面）60分' });
+  await a.getByRole('button', { name: 'この日の空き時間を保存' }).click();
+  await expect(a.getByText(/空き時間を変更しました/)).toBeVisible();
+
+  // 生徒の担当にする
+  await adminNav(a, '生徒');
+  await a.getByRole('row').filter({ hasText: EMAIL }).getByRole('link', { name: NAME }).click();
+  await a.getByRole('checkbox', { name: TEACHER }).check();
+  await a.getByRole('button', { name: '担当講師を保存する' }).click();
+  await expect(a.getByText('担当講師を保存しました')).toBeVisible();
+  await a.context().close();
+
+  // 生徒: 講師ページに写真付きで出て、予約で選べる
+  const s = await studentPage(browser);
+  await s.getByRole('link', { name: '講師', exact: true }).click();
+  const card = s.getByRole('button', { name: new RegExp(TEACHER) });
+  await expect(card).toBeVisible();
+  await expect(s.locator('img.profile-photo').last()).toBeVisible();
+  await s.getByRole('link', { name: '予約する' }).first().click();
+  await s.getByRole('button', { name: TEACHER }).click();
+  const [, m, d] = date.split('-').map(Number);
+  await expect(s.locator('.date-chip', { has: s.locator(`xpath=self::*[starts-with(@aria-label, "${m}月${d}日（")]`) })).toBeVisible();
+  await s.context().close();
+
+  // 講師本人もプロフィールを直せる（TC-07）
+  const t = await open(browser);
+  await login(t, STAFF, 'teacher@example.test');
+  await t.getByRole('link', { name: 'プロフィール' }).click();
+  await expect(t.getByRole('heading', { name: 'プロフィール', level: 1 })).toBeVisible();
+  await expect(t.getByLabel('担当の楽器')).toHaveValue(/ピアノ/);
+  await t.context().close();
 });

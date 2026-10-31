@@ -55,7 +55,7 @@ export async function submitTrialRequest(ctx: Ctx, raw: unknown) {
     { email: input.email },
     {
       subject: '【はなまる音楽教室】体験レッスンのお申込を受け付けました',
-      body: `${input.name} 様\n\n体験レッスンのお申込ありがとうございます。日時を調整のうえ、教室からご連絡します。` + SIGNATURE,
+      body: `${input.name} 様\n\n体験レッスンのお申込ありがとうございます。日時を調整のうえ、教室からご連絡します。\n体験レッスンの料金は、当日教室でお支払いください。` + SIGNATURE,
     },
   );
   return { id: row!.id };
@@ -106,7 +106,7 @@ async function confirmationMail(db: Db, slot: { teacherId: string; startsAt: Dat
   const [t] = await db.select({ name: teachers.name }).from(teachers).where(eq(teachers.id, slot.teacherId));
   return {
     subject: '【はなまる音楽教室】体験レッスンのご予約が確定しました',
-    body: `${name} 様\n\n体験レッスンのご予約が確定しました。\n\n日時: ${formatJa(slot.startsAt)}\n講師: ${t?.name ?? ''}\n\n当日お待ちしています。` + SIGNATURE,
+    body: `${name} 様\n\n体験レッスンのご予約が確定しました。\n\n日時: ${formatJa(slot.startsAt)}\n講師: ${t?.name ?? ''}\n\n体験レッスンの料金は、当日教室でお支払いください。\n当日お待ちしています。` + SIGNATURE,
   };
 }
 

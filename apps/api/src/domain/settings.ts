@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client.js';
 import { settings as settingsTable } from '../db/schema.js';
+import { addDays, dateOf, HOUR_MS, jst } from '../lib/time.js';
 
 // 管理者が画面から変えられる設定（3.8）。数値をコードに直接書かず、ここの既定値を初期値にする（2章の1）
 
@@ -18,6 +19,7 @@ export const NOTIFICATION_TYPES = [
   'invite',
   'password_reset',
   'trial_request',
+  'system_alert',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -28,6 +30,12 @@ export const settingsSchema = z.object({
   reserveDeadlineHours: z.number().int().min(0),
   changeDeadlineHours: z.number().int().min(0),
   cancelDeadlineHours: z.number().int().min(0),
+  /**
+   * キャンセルの締切の決め方（RS-04）。hoursBefore は「レッスンの N 時間前まで」（cancelDeadlineHours）、
+   * previousDayAt は「レッスンの前日の HH 時まで」（cancelDeadlinePrevDayHour。日本時間）
+   */
+  cancelDeadlineMode: z.enum(['hoursBefore', 'previousDayAt']),
+  cancelDeadlinePrevDayHour: z.number().int().min(0).max(23),
   /** 即確定か、管理者の承認制か（RS-06） */
   approvalRequired: z.boolean(),
   /** 未払いの猶予期間（PY-10）。初期値7日 */
@@ -40,6 +48,12 @@ export const settingsSchema = z.object({
   inviteCodeRegistration: z.boolean(),
   /** 体験専用の枠を一般に公開する（TR-02） */
   trialPublicSlots: z.boolean(),
+  /**
+   * ネットで使える支払い方法（PY-04）。カードは必ず使える。コンビニ払い・PayPay は
+   * Stripe の審査が通って有効にしてから ON にする（docs/stripe-prelaunch.md）。現金は教室で受け取る
+   */
+  konbiniEnabled: z.boolean(),
+  paypayEnabled: z.boolean(),
   /** 通知の種類ごとの送る/送らない（NT-02） */
   notifications: z.record(z.enum(NOTIFICATION_TYPES), z.boolean()),
   /** ログイン状態を保つ日数（AU-04） */
@@ -52,6 +66,21 @@ export const settingsSchema = z.object({
   inviteTokenDays: z.number().int().min(1).max(30),
   /** 前日リマインドを送る時刻（時）（NT-01） */
   reminderHour: z.number().int().min(0).max(23),
+  /** レビュー1件の文字数の上限（RV-01） */
+  reviewMaxLength: z.number().int().min(50).max(10000),
+  /**
+   * 講師の写真（TC-06）。おすすめの大きさ（KB）を超えても受け付け、画面に「画質を下げる」を出す。
+   * 上限（MB）はサーバーを守るためだけのもの
+   */
+  teacherPhotoRecommendedKB: z.number().int().min(50).max(5000),
+  teacherPhotoHardMaxMB: z.number().int().min(1).max(20),
+  /** 送れなかった通知を送り直すまでの分（OP-06）。並べた回数だけ送り直し、それでも届かなければあきらめる */
+  notificationRetryMinutes: z.array(z.number().int().min(1).max(7 * 24 * 60)).min(1).max(10),
+  /** 同じ処理の失敗を管理者に知らせる間隔（時間）（OP-05） */
+  systemAlertIntervalHours: z.number().int().min(1).max(24 * 7),
+  /** 古い記録の片付け（OP-07）。Stripe の通知の受信記録と、通知の本文を残す日数 */
+  stripeEventRetentionDays: z.number().int().min(30).max(3650),
+  notificationBodyRetentionDays: z.number().int().min(7).max(3650),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -69,13 +98,18 @@ export const DEFAULT_SETTINGS: Settings = {
   reserveDeadlineHours: 24,
   changeDeadlineHours: 24,
   cancelDeadlineHours: 24,
+  cancelDeadlineMode: 'previousDayAt',
+  cancelDeadlinePrevDayHour: 20,
   approvalRequired: false,
   graceDays: 7,
-  carryoverEnabled: false,
-  carryoverMax: 0,
+  // 余った回数は翌月末まで使える（教室の決まり: キャンセル分などは翌月まで振替できる）。繰り越した分は再び繰り越さない
+  carryoverEnabled: true,
+  carryoverMax: 99,
   selfRegistration: false,
   inviteCodeRegistration: false,
   trialPublicSlots: false,
+  konbiniEnabled: false,
+  paypayEnabled: false,
   notifications: Object.fromEntries(NOTIFICATION_TYPES.map((t) => [t, true])) as Settings['notifications'],
   sessionDays: 60,
   maxFailedLogins: 5,
@@ -83,6 +117,13 @@ export const DEFAULT_SETTINGS: Settings = {
   resetTokenMinutes: 60,
   inviteTokenDays: 7,
   reminderHour: 9,
+  reviewMaxLength: 1000,
+  teacherPhotoRecommendedKB: 800,
+  teacherPhotoHardMaxMB: 15,
+  notificationRetryMinutes: [5, 30, 120],
+  systemAlertIntervalHours: 24,
+  stripeEventRetentionDays: 180,
+  notificationBodyRetentionDays: 90,
 };
 
 export async function getSettings(db: Db): Promise<Settings> {
@@ -118,4 +159,28 @@ export async function getSetting<K extends SettingKey>(db: Db, key: K): Promise<
   const [row] = await db.select().from(settingsTable).where(eq(settingsTable.key, key));
   if (!row) return DEFAULT_SETTINGS[key];
   return settingsSchema.shape[key].parse(row.value) as Settings[K];
+}
+
+/** いま選べる支払い方法（設定で止めているものは除く）。現金は教室で受け取るので、ネットの支払いには使わない */
+export function enabledBillingMethods(settings: Settings): ('card' | 'konbini' | 'paypay' | 'cash')[] {
+  return ['card', ...(settings.konbiniEnabled ? (['konbini'] as const) : []), ...(settings.paypayEnabled ? (['paypay'] as const) : []), 'cash'];
+}
+
+/**
+ * キャンセルの締切（RS-04）。これより後のキャンセルは回数が戻らない。
+ * previousDayAt は、レッスンの日（日本時間）の前の日の HH:00（日本時間）
+ */
+export function cancelDeadlineOf(settings: Settings, startsAt: Date): Date {
+  if (settings.cancelDeadlineMode === 'previousDayAt') {
+    const hour = String(settings.cancelDeadlinePrevDayHour).padStart(2, '0');
+    return jst(addDays(dateOf(startsAt), -1), `${hour}:00`);
+  }
+  return new Date(startsAt.getTime() - settings.cancelDeadlineHours * HOUR_MS);
+}
+
+/** 画面やメールに出すキャンセルの締切の言い方（「レッスンの前日20時まで」など） */
+export function cancelDeadlineLabel(settings: Settings): string {
+  return settings.cancelDeadlineMode === 'previousDayAt'
+    ? `レッスンの前日${settings.cancelDeadlinePrevDayHour}時まで`
+    : `レッスンの${settings.cancelDeadlineHours}時間前まで`;
 }

@@ -1,4 +1,4 @@
-import { createApi } from '@hanamaru/ui';
+import { createApi, useLoad } from '@hanamaru/ui';
 
 export const api = createApi('/api', {
   onLoginRequired: (code) => {
@@ -24,7 +24,8 @@ export interface StudentRow {
 export interface Teacher {
   id: string;
   name: string;
-  profileSlug: string;
+  /** 担当の楽器（プロフィール: TC-06） */
+  instruments: string[];
   active: boolean;
   email: string;
 }
@@ -35,6 +36,8 @@ export interface LessonType {
   kind: 'private' | 'group';
   durationMinutes: number;
   capacity: number;
+  /** オンラインのレッスン（RS-09） */
+  online: boolean;
   active: boolean;
 }
 
@@ -68,6 +71,8 @@ export interface ReservationRow {
   studentId: string | null;
   studentName: string | null;
   lessonTypeName: string;
+  /** オンラインのレッスン（RS-09） */
+  online?: boolean;
   trialRequestId: string | null;
 }
 
@@ -79,4 +84,13 @@ export interface Slot {
   capacity: number;
   booked: number;
   forTrial: boolean;
+}
+
+/** いま選べる支払い方法（設定で止めているものは出さない: PY-04）。選んでいる値が止めた方法でも、表示は残す */
+const BILLING_LABELS = { card: 'カード（自動課金）', konbini: 'コンビニ', paypay: 'PayPay', cash: '現金' } as const;
+export function useBillingOptions(current?: string): { value: string; label: string }[] {
+  const { data } = useLoad(() => api.get<{ konbiniEnabled: boolean; paypayEnabled: boolean }>('/settings'), []);
+  const enabled = new Set(['card', 'cash', ...(data?.konbiniEnabled ? ['konbini'] : []), ...(data?.paypayEnabled ? ['paypay'] : [])]);
+  if (current) enabled.add(current);
+  return (Object.keys(BILLING_LABELS) as (keyof typeof BILLING_LABELS)[]).filter((k) => enabled.has(k)).map((k) => ({ value: k, label: BILLING_LABELS[k] }));
 }

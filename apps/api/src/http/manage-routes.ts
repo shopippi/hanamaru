@@ -30,6 +30,7 @@ import {
 } from '../domain/billing.js';
 import { listLessonTypes, listRooms, saveLessonType, saveRoom } from '../domain/catalog.js';
 import { dashboard } from '../domain/dashboard.js';
+import { dismissNotification, resendNotification, systemStatus } from '../domain/system.js';
 import { bookTrialAsAdmin, listTrialRequests, setTrialStatus } from '../domain/trial.js';
 import { adjustCredits } from '../domain/credits.js';
 import {
@@ -62,7 +63,8 @@ import {
 import { getSettings, settingsPatchSchema, updateSettings } from '../domain/settings.js';
 import { audit } from '../domain/audit.js';
 import { jst, monthOf } from '../lib/time.js';
-import { body, rawBody, dateParam, isoDateTime, monthParam, query, requireAuth, type AppDeps, type Env } from './app.js';
+import { body, rawBody, dateParam, isoDateTime, monthParam, photoResponse, query, requireAuth, type AppDeps, type Env } from './app.js';
+import { deletePhotoAsAdmin, photoForAdmin, profileForAdmin, setPhotoAsAdmin, updateProfileAsAdmin } from '../domain/teacher-profiles.js';
 import { authRoutes } from './auth-routes.js';
 
 // 管理者の画面の API（manage.hanamarumusic.com/api。手前に Cloudflare Access: URL-02）
@@ -128,6 +130,15 @@ export function manageRoutes(deps: AppDeps) {
     await setTeacherActive(ctx, c.get('actor'), c.req.param('id'), input.active);
     return c.json({ ok: true });
   });
+  // 講師のプロフィールと写真（TC-06）
+  priv.get('/teachers/:id/profile', async (c) => c.json(await profileForAdmin(ctx, c.get('actor'), c.req.param('id'))));
+  priv.put('/teachers/:id/profile', async (c) => c.json(await updateProfileAsAdmin(ctx, c.get('actor'), c.req.param('id'), await rawBody(c))));
+  priv.get('/teachers/:id/photo', async (c) => photoResponse(c, await photoForAdmin(ctx, c.get('actor'), c.req.param('id'))));
+  priv.put('/teachers/:id/photo', async (c) => c.json(await setPhotoAsAdmin(ctx, c.get('actor'), c.req.param('id'), await rawBody(c))));
+  priv.delete('/teachers/:id/photo', async (c) => {
+    await deletePhotoAsAdmin(ctx, c.get('actor'), c.req.param('id'));
+    return c.json({ ok: true });
+  });
   priv.get('/teachers/:id/availability', async (c) => c.json(await availabilityOf(ctx.db, c.req.param('id'))));
   priv.post('/teachers/:id/availability', async (c) => {
     const input = await body(c, z.object({ change: availabilityChange, confirm: z.boolean().default(false) }));
@@ -175,6 +186,7 @@ export function manageRoutes(deps: AppDeps) {
         studentId: reservations.studentId,
         studentName: students.name,
         lessonTypeName: lessonTypes.name,
+        online: lessonTypes.online,
         trialRequestId: reservations.trialRequestId,
       })
       .from(reservations)
@@ -304,6 +316,17 @@ export function manageRoutes(deps: AppDeps) {
   priv.get('/dashboard', async (c) => {
     const q = query(c, z.object({ month: monthParam.optional() }));
     return c.json(await dashboard(ctx, c.get('actor'), q));
+  });
+
+  // --- システムの状態（OP-05〜OP-08） ---
+  priv.get('/system', async (c) => c.json(await systemStatus(ctx, c.get('actor'))));
+  priv.post('/system/notifications/:id/resend', async (c) => {
+    await resendNotification(ctx, c.get('actor'), c.req.param('id'));
+    return c.json({ ok: true });
+  });
+  priv.post('/system/notifications/:id/dismiss', async (c) => {
+    await dismissNotification(ctx, c.get('actor'), c.req.param('id'));
+    return c.json({ ok: true });
   });
 
   // --- 体験レッスン（TR-01） ---

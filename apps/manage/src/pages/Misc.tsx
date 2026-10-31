@@ -257,6 +257,8 @@ type Settings = {
   reserveDeadlineHours: number;
   changeDeadlineHours: number;
   cancelDeadlineHours: number;
+  cancelDeadlineMode: 'hoursBefore' | 'previousDayAt';
+  cancelDeadlinePrevDayHour: number;
   approvalRequired: boolean;
   graceDays: number;
   carryoverEnabled: boolean;
@@ -264,6 +266,8 @@ type Settings = {
   selfRegistration: boolean;
   inviteCodeRegistration: boolean;
   trialPublicSlots: boolean;
+  konbiniEnabled: boolean;
+  paypayEnabled: boolean;
   notifications: Record<string, boolean>;
   sessionDays: number;
   maxFailedLogins: number;
@@ -271,10 +275,15 @@ type Settings = {
   resetTokenMinutes: number;
   inviteTokenDays: number;
   reminderHour: number;
+  teacherPhotoRecommendedKB: number;
+  teacherPhotoHardMaxMB: number;
+  systemAlertIntervalHours: number;
+  stripeEventRetentionDays: number;
+  notificationBodyRetentionDays: number;
 };
 
 /** ログインに欠かせないため、設定にかかわらず送るメール（API の ALWAYS_SENT と同じ） */
-const ALWAYS_SENT = ['invite', 'password_reset'];
+const ALWAYS_SENT = ['invite', 'password_reset', 'system_alert'];
 
 const NOTIFY_LABEL: Record<string, string> = {
   reservation_confirmed: '予約の確定',
@@ -288,6 +297,7 @@ const NOTIFY_LABEL: Record<string, string> = {
   invite: '招待',
   password_reset: 'パスワード再設定',
   trial_request: '体験レッスンの申込',
+  system_alert: 'システムの要確認（管理者あて）',
 };
 
 export function SettingsPage() {
@@ -321,7 +331,20 @@ export function SettingsPage() {
                 <div className="grid-2">
                   {numField('reserveDeadlineHours', '予約の締切（レッスンの何時間前まで）')}
                   {numField('changeDeadlineHours', '変更の締切（何時間前まで）')}
-                  {numField('cancelDeadlineHours', 'キャンセルの締切（何時間前まで）', 'これより後のキャンセルは回数が戻りません')}
+                </div>
+                <div className="grid-2">
+                  <Select
+                    label="キャンセルの締切の決め方"
+                    hint="これより後のキャンセルは回数が戻りません"
+                    value={s.cancelDeadlineMode}
+                    onChange={(e) => set('cancelDeadlineMode', e.target.value as Settings['cancelDeadlineMode'])}
+                  >
+                    <option value="previousDayAt">レッスンの前日の決まった時刻まで</option>
+                    <option value="hoursBefore">レッスンの何時間前まで</option>
+                  </Select>
+                  {s.cancelDeadlineMode === 'previousDayAt'
+                    ? numField('cancelDeadlinePrevDayHour', 'キャンセルの締切（前日の何時まで）', '0〜23。例: 20 なら前日の20時まで')
+                    : numField('cancelDeadlineHours', 'キャンセルの締切（何時間前まで）')}
                 </div>
                 {numField('publishWeeks', '生徒に予約を公開する期間（週）', '受付日と空き時間は「受付日」と講師の画面のカレンダーで決めます')}
                 <Checkbox label="予約を管理者の承認制にする（承認まで「仮予約」）" checked={s.approvalRequired} onChange={(e) => set('approvalRequired', e.target.checked)} />
@@ -341,6 +364,13 @@ export function SettingsPage() {
                 <Checkbox label="自己登録を受け付ける（管理者の承認が必要）" checked={s.selfRegistration} onChange={(e) => set('selfRegistration', e.target.checked)} />
                 <Checkbox label="招待コードでの登録を受け付ける" checked={s.inviteCodeRegistration} onChange={(e) => set('inviteCodeRegistration', e.target.checked)} />
                 <Checkbox label="体験専用の枠を一般に公開する" checked={s.trialPublicSlots} onChange={(e) => set('trialPublicSlots', e.target.checked)} />
+                </div>
+              </Panel>
+              <Panel title="支払い方法">
+                <div className="stack-sm">
+                  <p className="small secondary">カード（Apple Pay・Google Pay を含む）と現金は、いつでも使えます。コンビニ払い・PayPay は、Stripe の審査が通って有効にしてから ON にしてください。</p>
+                  <Checkbox label="コンビニ払いを使う" checked={s.konbiniEnabled} onChange={(e) => set('konbiniEnabled', e.target.checked)} />
+                  <Checkbox label="PayPay を使う" checked={s.paypayEnabled} onChange={(e) => set('paypayEnabled', e.target.checked)} />
                 </div>
               </Panel>
               <Panel title="通知（メール）">
@@ -365,6 +395,15 @@ export function SettingsPage() {
                   {numField('lockMinutes', '上限に達したときのロック（分）')}
                   {numField('resetTokenMinutes', '再設定リンクの有効時間（分）')}
                   {numField('inviteTokenDays', '招待リンクの有効日数')}
+                </div>
+              </Panel>
+              <Panel title="講師の写真・システム">
+                <div className="grid-2">
+                  {numField('teacherPhotoRecommendedKB', '講師の写真のおすすめの大きさ（KB）', 'これを超えると、プロフィールの編集画面に「画質を下げる」を出します')}
+                  {numField('teacherPhotoHardMaxMB', '講師の写真の上限（MB）', 'これを超える写真は受け付けません')}
+                  {numField('systemAlertIntervalHours', '失敗が続くときの再通知の間隔（時間）', '定期処理が失敗したとき、管理者へのメールはこの間隔で1通だけ送ります')}
+                  {numField('stripeEventRetentionDays', 'Stripe の通知の記録を残す日数')}
+                  {numField('notificationBodyRetentionDays', '送ったメールの本文を残す日数', '過ぎたら本文だけを消し、送った記録は残します')}
                 </div>
               </Panel>
               <div className="panel" style={{ position: 'sticky', bottom: 16, zIndex: 5, boxShadow: 'var(--shadow-lg)' }}>
@@ -395,7 +434,7 @@ export function SettingsPage() {
 function Catalog() {
   const toast = useToast();
   const { state, reload } = useLoad(() => Promise.all([api.get<LessonType[]>('/lesson-types'), api.get<{ id: string; name: string; active: boolean }[]>('/rooms')]), []);
-  const [lt, setLt] = useState({ name: '', kind: 'private', durationMinutes: '45', capacity: '1' });
+  const [lt, setLt] = useState({ name: '', kind: 'private', durationMinutes: '60', capacity: '1', online: false });
   const [room, setRoom] = useState('');
   const run = useAction(async (fn: () => Promise<unknown>, msg: string) => {
     try {
@@ -424,7 +463,7 @@ function Catalog() {
                       )}
                     </span>
                     <span className="list-meta">
-                      {t.kind === 'group' ? `グループ・定員${t.capacity}` : '個人'}・{t.durationMinutes}分
+                      {t.kind === 'group' ? `グループ・定員${t.capacity}` : '個人'}・{t.durationMinutes}分{t.online ? '・オンライン' : ''}
                     </span>
                   </span>
                   <Button variant="quiet" onClick={() => void run.run(() => api.patch(`/lesson-types/${t.id}`, { ...t, active: !t.active }), '保存しました')}>
@@ -435,17 +474,22 @@ function Catalog() {
             </ul>
             <div className="panel-body panel-divider stack">
             <h3>レッスン種別を追加</h3>
-            <TextField label="名前" hint="例: 個人 45分" value={lt.name} onChange={(e) => setLt({ ...lt, name: e.target.value })} />
+            <TextField label="名前" hint="例: ポピュラーピアノ（対面）60分" value={lt.name} onChange={(e) => setLt({ ...lt, name: e.target.value })} />
             <Select label="種類" value={lt.kind} onChange={(e) => setLt({ ...lt, kind: e.target.value })}>
               <option value="private">個人</option>
               <option value="group">グループ</option>
             </Select>
             <TextField label="時間（分）" inputMode="numeric" value={lt.durationMinutes} onChange={(e) => setLt({ ...lt, durationMinutes: e.target.value })} />
             {lt.kind === 'group' && <TextField label="定員" inputMode="numeric" value={lt.capacity} onChange={(e) => setLt({ ...lt, capacity: e.target.value })} />}
+            <Checkbox
+              label="オンラインのレッスン（教室の受付時間に関係なく、講師の空き時間で予約できる）"
+              checked={lt.online}
+              onChange={(e) => setLt({ ...lt, online: e.target.checked })}
+            />
             <Button
               variant="secondary"
               disabled={!lt.name}
-              onClick={() => void run.run(() => api.post('/lesson-types', { name: lt.name, kind: lt.kind, durationMinutes: Number(lt.durationMinutes), capacity: Number(lt.capacity) }), 'レッスン種別を追加しました')}
+              onClick={() => void run.run(() => api.post('/lesson-types', { name: lt.name, kind: lt.kind, durationMinutes: Number(lt.durationMinutes), capacity: Number(lt.capacity), online: lt.online }), 'レッスン種別を追加しました')}
               style={{ alignSelf: 'flex-start' }}
             >
               <IconPlus size={18} />
@@ -565,6 +609,11 @@ const ACTION_LABEL: Record<string, string> = {
   'closure.create': '休講',
   'closure.delete': '休講の取消',
   'course.price': '料金の改定',
+  'teacher.profile': '講師のプロフィールの変更',
+  'teacher.photo': '講師の写真の変更',
+  'teacher.photo_delete': '講師の写真の削除',
+  'notification.resend': '通知の再送',
+  'notification.dismiss': '通知を送らないことにした',
 };
 
 export function Audit() {

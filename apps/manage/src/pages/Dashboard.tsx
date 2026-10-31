@@ -45,6 +45,8 @@ interface Dash {
     pendingReservations: number;
     newTrialRequests: number;
     creditShortages: { studentId: string; studentName: string; month: string; shortBy: number }[];
+    /** システムの状態の要確認（OP-08） */
+    systemAttention: number;
   };
 }
 interface Res {
@@ -56,6 +58,8 @@ interface Res {
   roomName: string | null;
   studentName: string;
   lessonTypeName: string;
+  /** オンラインのレッスン（RS-09） */
+  online?: boolean;
 }
 
 const shiftMonth = (m: string, n: number) => {
@@ -94,6 +98,7 @@ export function Dashboard() {
                 {s.studentName}: {fmtMonthShort(s.month)}の回数が{s.shortBy}回足りません
               </Link>
             )),
+            d.todo.systemAttention > 0 && <Link key="sys" to="/system">システムに要確認があります（{d.todo.systemAttention}件）</Link>,
           ].filter(Boolean);
           const list = range === 'today' ? d.reservations.today : d.reservations.week;
           const groups = new Map<string, Res[]>();
@@ -176,6 +181,7 @@ export function Dashboard() {
                                 <span className="list-title">{r.studentName}</span>
                                 <span className="list-meta">
                                   {r.lessonTypeName}
+                                  {r.online && '・オンライン'}
                                   {groupBy === 'room' ? `・${r.teacherName}` : ''}
                                 </span>
                               </span>

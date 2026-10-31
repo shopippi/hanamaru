@@ -8,6 +8,7 @@ import { closeMonth } from './credits.js';
 import { messages } from './messages.js';
 import { applyScheduledStatuses } from './people.js';
 import { getSettings } from './settings.js';
+import { cleanup, retryNotifications, trackedRun } from './system.js';
 
 // 定期処理。どれも何度実行しても結果が同じになるように作り、数分おきに全部を流す。
 // （月の切り替わりの瞬間にサーバーが止まっていても、次に動いたときに追いつく）
@@ -19,7 +20,7 @@ export async function sendReminders(ctx: Ctx): Promise<number> {
   if (jstParts(now).hour < settings.reminderHour) return 0;
   const tomorrow = addDays(dateOf(now), 1);
   const due = await ctx.db
-    .select({ r: reservations, teacherName: teachers.name, lessonTypeName: lessonTypes.name })
+    .select({ r: reservations, teacherName: teachers.name, lessonTypeName: lessonTypes.name, online: lessonTypes.online })
     .from(reservations)
     .innerJoin(teachers, eq(teachers.id, reservations.teacherId))
     .innerJoin(lessonTypes, eq(lessonTypes.id, reservations.lessonTypeId))
@@ -32,7 +33,7 @@ export async function sendReminders(ctx: Ctx): Promise<number> {
       ),
     );
   let sent = 0;
-  for (const { r, teacherName } of due) {
+  for (const { r, teacherName, lessonTypeName, online } of due) {
     if (!r.studentId) continue;
     // 先に印を付けてから送る（送信が重なっても二重に送らない）
     const marked = await ctx.db
@@ -45,7 +46,7 @@ export async function sendReminders(ctx: Ctx): Promise<number> {
     await ctx.notifier.send(
       'reservation_reminder',
       await recipientOfStudent(ctx.db, s),
-      messages.reservationReminder({ studentName: s.name, teacherName, startsAt: r.startsAt }),
+      messages.reservationReminder({ studentName: s.name, teacherName, startsAt: r.startsAt, lessonTypeName, online }),
     );
     sent++;
   }
@@ -76,11 +77,16 @@ export async function runJobs(ctx: Ctx): Promise<JobReport[]> {
     ['reconcilePayments', () => reconcilePayments(ctx)],
     // 前日リマインド（NT-01）
     ['sendReminders', () => sendReminders(ctx)],
+    // 送れなかった通知の送り直し（OP-06）
+    ['retryNotifications', () => retryNotifications(ctx)],
+    // 古い記録の片付け（OP-07）
+    ['cleanup', () => cleanup(ctx)],
   ];
   const reports: JobReport[] = [];
   for (const [name, run] of jobs) {
     try {
-      reports.push({ name, result: await run() });
+      // 成否を記録し、失敗が続いたら管理者に知らせる（OP-05）
+      reports.push({ name, result: await trackedRun(ctx, name, run) });
     } catch (e) {
       console.error(`job ${name} failed`, e);
       reports.push({ name, error: e instanceof Error ? e.message : String(e) });

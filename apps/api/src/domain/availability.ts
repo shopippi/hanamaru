@@ -45,12 +45,14 @@ interface AvailabilityData {
   exceptions: (typeof availabilityExceptions.$inferSelect)[];
   closures: (typeof closures.$inferSelect)[];
   school: (typeof schoolHours.$inferSelect)[];
+  /** オンラインのレッスン種別（RS-09） */
+  online: Set<string>;
 }
 
 async function loadData(db: Db, teacherIds: string[], from: DateStr, to: DateStr): Promise<AvailabilityData> {
   const inRange = <T extends typeof closures.date | typeof schoolHours.date>(col: T) => and(gte(col, from), lt(col, addDays(to, 1)));
-  if (teacherIds.length === 0) return { rules: [], exceptions: [], closures: [], school: [] };
-  const [rules, exceptions, closureRows, school] = await Promise.all([
+  if (teacherIds.length === 0) return { rules: [], exceptions: [], closures: [], school: [], online: new Set() };
+  const [rules, exceptions, closureRows, school, onlineTypes] = await Promise.all([
     db.select().from(availabilityRules).where(inArray(availabilityRules.teacherId, teacherIds)),
     db
       .select()
@@ -64,8 +66,9 @@ async function loadData(db: Db, teacherIds: string[], from: DateStr, to: DateStr
       ),
     db.select().from(closures).where(inRange(closures.date)),
     db.select().from(schoolHours).where(inRange(schoolHours.date)),
+    db.select({ id: lessonTypes.id }).from(lessonTypes).where(eq(lessonTypes.online, true)),
   ]);
-  return { rules, exceptions, closures: closureRows, school };
+  return { rules, exceptions, closures: closureRows, school, online: new Set(onlineTypes.map((t) => t.id)) };
 }
 
 /** その日の教室の受付時間（AV-06）。ない日は空 */
@@ -115,12 +118,18 @@ function blockedIntervals(data: AvailabilityData, teacherId: string, date: DateS
   return out;
 }
 
-/** その日の予約できる時間帯（予約の有無は見ない）。講師の空き時間 ∩ 教室の受付時間（AV-08） */
+/**
+ * その日の予約できる時間帯（予約の有無は見ない）。講師の空き時間 ∩ 教室の受付時間（AV-08）。
+ * オンラインのレッスンは教室を使わないので、講師の空き時間だけで決まる（RS-09）。休講日はどちらも予約できない
+ */
 function windowsFor(data: AvailabilityData, teacherId: string, date: DateStr): { windows: Window[]; blocked: Interval[] } {
   const school = schoolWindowsOf(data.school, date);
-  if (school.length === 0) return { windows: [], blocked: [] };
   const windows: Window[] = [];
   for (const t of teacherWindowsOf(data.rules, data.exceptions, teacherId, date).windows) {
+    if (data.online.has(t.lessonTypeId)) {
+      windows.push({ ...t, roomId: null, teacherId, date });
+      continue;
+    }
     for (const s of school) {
       const start = Math.max(t.start, s.start);
       const end = Math.min(t.end, s.end);

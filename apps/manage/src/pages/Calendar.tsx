@@ -136,6 +136,7 @@ export function Calendar() {
                               <span className="list-title">{r.studentId ? <Link to={`/students/${r.studentId}`}>{r.studentName}</Link> : '体験レッスン'}</span>
                               <span className="list-meta">
                                 {r.teacherName}・{r.lessonTypeName}
+                                {r.online && <span className="badge" style={{ marginLeft: 8 }}>オンライン</span>}
                               </span>
                             </span>
                             <span className="row-tight">

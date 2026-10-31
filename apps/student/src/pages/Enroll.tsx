@@ -11,7 +11,7 @@ interface Options {
   packages: { id: string; name: string; lessonCount: number; admissionFee: number; lessonsPrice: number; total: number }[];
   course: { name: string; lessonsPerMonth: number; amount: number | null } | null;
   methods: { method: 'card' | 'konbini' | 'paypay'; label: string; recommended: boolean }[];
-  terms: { cancelDeadlineHours: number; graceDays: number };
+  terms: { cancelDeadlineHours: number; cancelDeadline: string; carryover: boolean };
 }
 
 export function Enroll() {
@@ -66,7 +66,7 @@ export function Enroll() {
                     <span className="list-row-main">
                       <span className="list-title">{p.name}</span>
                       <span className="list-meta">
-                        入会金 {fmtYen(p.admissionFee)}＋レッスン{p.lessonCount}回 {fmtYen(p.lessonsPrice)}
+                        {p.admissionFee > 0 ? `入会金 ${fmtYen(p.admissionFee)}＋` : ''}レッスン{p.lessonCount}回 {fmtYen(p.lessonsPrice)}
                       </span>
                     </span>
                     <span className="choice-price num">
@@ -90,6 +90,7 @@ export function Enroll() {
                     </span>
                   </label>
                 ))}
+                <p className="small secondary">現金でのお支払いをご希望の場合は、教室にご相談ください。</p>
               </fieldset>
               <section className="stack-sm" aria-labelledby="terms-title">
                 <h2 className="field-label" id="terms-title">
@@ -113,12 +114,14 @@ export function Enroll() {
                   </div>
                   <div>
                     <dt>キャンセル</dt>
-                    <dd>レッスンの{o.terms.cancelDeadlineHours}時間前までは回数をお戻しします。それより後のキャンセルと無断欠席は、回数を使います</dd>
+                    <dd>{o.terms.cancelDeadline}のキャンセルは回数をお戻しします。それより後のキャンセルと無断欠席は、回数を使います</dd>
                   </div>
-                  <div>
-                    <dt>未払い</dt>
-                    <dd>毎月1日から{o.terms.graceDays}日たってもお支払いを確認できない場合、その月のご予約は取り消しになります</dd>
-                  </div>
+                  {o.terms.carryover && (
+                    <div>
+                      <dt>余った回数</dt>
+                      <dd>その月に使わなかった回数は、翌月末まで使えます</dd>
+                    </div>
+                  )}
                 </dl>
                 <Checkbox label="契約の内容と利用規約に同意します" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
                 {TERMS_URL && (
@@ -130,9 +133,16 @@ export function Enroll() {
                 )}
               </section>
               {selected && (
-                <Button type="submit" block pending={pay.pending} disabled={!online || !agreed} pendingLabel="お支払い画面へ移動しています…">
-                  {fmtYen(selected.total)}（税込）を支払う
-                </Button>
+                <div className="stack-sm">
+                  <p className="spread enroll-total">
+                    <span className="secondary">お支払い金額（税込）</span>
+                    <strong className="num">{fmtYen(selected.total)}</strong>
+                  </p>
+                  <Button type="submit" block pending={pay.pending} disabled={!online || !agreed} pendingLabel="お支払い画面へ移動しています…">
+                    申し込む
+                  </Button>
+                  <p className="small muted center">次の画面でカードの情報を入れて、お支払いを済ませます。</p>
+                </div>
               )}
               <p className="small muted">領収書は決済サービス（Stripe）からメールでお送りします。解約・休会は教室にご連絡ください。</p>
             </form>

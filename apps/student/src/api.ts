@@ -22,7 +22,9 @@ export interface Home {
   month: string;
   remaining: number;
   nextMonth: { month: string; remaining: number };
-  nextReservation: { id: string; startsAt: string; endsAt: string; status: string; teacherName: string; lessonTypeName: string } | null;
+  nextReservation: { id: string; startsAt: string; endsAt: string; status: string; teacherName: string; lessonTypeName: string; online: boolean } | null;
+  /** 残り回数のうち、先月から繰り越した分（今月末まで。PY-07） */
+  carried: number;
   payment: 'paid' | 'confirming' | 'unpaid' | 'failed' | 'none';
   autopay: boolean;
   /** カード払いなのにカードが未登録。登録をお願いする（PY-03） */
@@ -56,6 +58,7 @@ export interface Reservation {
   teacherId: string;
   teacherName: string;
   lessonTypeName: string;
+  online: boolean;
   startsAt: string;
   endsAt: string;
   status: 'pending' | 'confirmed' | 'cancelled';
@@ -68,4 +71,6 @@ export interface LessonType {
   name: string;
   kind: string;
   durationMinutes: number;
+  /** オンラインのレッスン（RS-09） */
+  online: boolean;
 }

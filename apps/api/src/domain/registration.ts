@@ -1,6 +1,4 @@
 import { and, eq, sql } from 'drizzle-orm';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { accounts, inviteCodes, students, teachers } from '../db/schema.js';
 import { hashPassword, newToken } from '../lib/crypto.js';
@@ -12,7 +10,7 @@ import type { Actor, Ctx } from './context.js';
 import { conflict, invalid, notFound } from './errors.js';
 import { getSettings } from './settings.js';
 
-// 自己登録と招待コード（ST-02、ST-03）、講師プロフィール（TC-05、TC-06）
+// 自己登録と招待コード（ST-02、ST-03）。講師プロフィール（TC-05〜07）は teacher-profiles.ts
 
 export const registrationInput = z.object({
   email: z.string().trim().email('メールアドレスの形式が正しくありません').transform(normalizeEmail),
@@ -115,51 +113,4 @@ export async function deactivateInviteCode(ctx: Ctx, actor: Actor, id: string) {
 export async function listInviteCodes(ctx: Ctx, actor: Actor) {
   assertAdmin(actor);
   return ctx.db.select().from(inviteCodes).orderBy(inviteCodes.createdAt);
-}
-
-// --- 講師プロフィール ------------------------------------------------------------------
-
-/** 将来の CMS と同じ形（TC-06） */
-export const teacherProfile = z.object({
-  slug: z.string(),
-  name: z.string(),
-  photo: z.string().nullable(),
-  instruments: z.array(z.string()),
-  career: z.string(),
-  message: z.string(),
-});
-export type TeacherProfile = z.infer<typeof teacherProfile>;
-
-const PROFILES_FILE = fileURLToPath(new URL('../../data/teacher-profiles.json', import.meta.url));
-
-/** リポジトリ内のデータファイルから読む（TC-06）。ファイルを更新して反映すると画面に出る */
-export function loadProfiles(file = PROFILES_FILE): Map<string, TeacherProfile> {
-  const list = z.array(teacherProfile).parse(JSON.parse(readFileSync(file, 'utf8')));
-  return new Map(list.map((p) => [p.slug, p]));
-}
-
-/** 生徒が見られるのは担当講師のプロフィールだけ（TC-05） */
-export async function teacherProfilesForStudent(
-  ctx: Ctx,
-  actor: Actor,
-  studentId: string,
-  profiles: Map<string, TeacherProfile> = loadProfiles(),
-) {
-  const s = await studentForActor(ctx.db, actor, studentId);
-  const ids = await assignedTeacherIds(ctx.db, s.id);
-  const out = [];
-  for (const id of ids) {
-    const [t] = await ctx.db.select().from(teachers).where(eq(teachers.id, id));
-    if (!t || !t.active) continue;
-    const p = profiles.get(t.profileSlug);
-    out.push({
-      teacherId: t.id,
-      name: p?.name ?? t.name,
-      photo: p?.photo ?? null,
-      instruments: p?.instruments ?? [],
-      career: p?.career ?? '',
-      message: p?.message ?? '',
-    });
-  }
-  return out;
 }

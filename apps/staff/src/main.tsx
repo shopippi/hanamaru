@@ -7,7 +7,9 @@ import { api } from './api.js';
 import { Layout } from './layout.js';
 import { Availability } from './pages/Availability.js';
 import { Lessons } from './pages/Lessons.js';
+import { Profile } from './pages/Profile.js';
 import { Record } from './pages/Record.js';
+import { Reviews } from './pages/Reviews.js';
 import { StudentPage, Students } from './pages/Students.js';
 
 // 講師の画面（staff.hanamarumusic.com）
@@ -31,10 +33,12 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/invite" element={<SetPasswordPage api={api} mode="invite" />} />
           <Route element={<Layout />}>
             <Route index element={<Lessons />} />
+            <Route path="/reviews" element={<Reviews />} />
             <Route path="/lessons/:id/record" element={<Record />} />
             <Route path="/students" element={<Students />} />
             <Route path="/students/:id" element={<StudentPage />} />
             <Route path="/availability" element={<Availability />} />
+            <Route path="/profile" element={<Profile />} />
           </Route>
         </Routes>
       </ToastProvider>

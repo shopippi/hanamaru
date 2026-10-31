@@ -11,6 +11,8 @@ export interface Lesson {
   studentId: string | null;
   studentName: string | null;
   lessonTypeName: string;
+  /** オンラインのレッスン（RS-09） */
+  online?: boolean;
   startsAt: string;
   endsAt: string;
   status: string;
