@@ -26,6 +26,7 @@ import {
   METHOD_LABEL,
   monthKey,
   useLoad,
+  TableWrap,
 } from '@hanamaru/ui';
 import { api } from '../api.js';
 
@@ -241,7 +242,7 @@ export function Dashboard() {
                   </>
                 }
               >
-                <div className="table-wrap flush">
+                <TableWrap label="講師別のレッスン数" flush>
                   <table className="table">
                     <thead>
                       <tr>
@@ -264,7 +265,7 @@ export function Dashboard() {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </TableWrap>
               </Panel>
             </div>
           );

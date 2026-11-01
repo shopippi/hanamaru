@@ -21,6 +21,7 @@ import {
   useLoad,
   readTextFile,
   useToast,
+  TableWrap,
 } from '@hanamaru/ui';
 import { api, useBillingOptions, type Course, type StudentRow, type Teacher } from '../api.js';
 
@@ -74,7 +75,7 @@ export function Students() {
                 <Empty icon={<IconUsers />} message="該当する生徒はいません" text="絞り込みを変えるか、生徒を登録してください。" action={<Button onClick={() => setMode('new')}>生徒を登録</Button>} />
               </div>
             ) : (
-              <div className="table-wrap">
+              <TableWrap label="生徒の一覧">
                 <table className="table">
                   <caption className="table-caption">{list.length}人</caption>
                   <thead>
@@ -115,7 +116,7 @@ export function Students() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </TableWrap>
             )
           }
         </Loadable>

@@ -29,6 +29,7 @@ import {
   Warning,
   useLoad,
   useToast,
+  TableWrap,
 } from '@hanamaru/ui';
 import { api, type AuditEntry, useBillingOptions, type Course, type Package, type StudentStatus, type Teacher } from '../api.js';
 
@@ -422,7 +423,7 @@ function CreditsSection({ d, onChanged }: { d: Detail; onChanged: () => void }) 
       </div>
       <details>
         <summary>回数の履歴（{d.creditLedger.length}件）</summary>
-        <div className="table-wrap">
+        <TableWrap label="回数の履歴">
           <table className="table">
             <thead>
               <tr>
@@ -447,7 +448,7 @@ function CreditsSection({ d, onChanged }: { d: Detail; onChanged: () => void }) 
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </details>
       <Panel
         title="回数の手動調整"
@@ -501,7 +502,7 @@ function PaymentsSection({ d, packages, onChanged }: { d: Detail; packages: Pack
           <Empty icon={<IconReceipt />} message="入金の記録はありません" />
         </div>
       ) : (
-        <div className="table-wrap">
+        <TableWrap label="入金の記録">
           <table className="table">
             <thead>
               <tr>
@@ -535,7 +536,7 @@ function PaymentsSection({ d, packages, onChanged }: { d: Detail; packages: Pack
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       )}
       <div className="grid-2">
         <Panel

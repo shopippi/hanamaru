@@ -427,3 +427,15 @@ export function DateTile({ at }: { at: Date | string }) {
     </span>
   );
 }
+
+/**
+ * 横に広い表の入れ物。スマホでは横に送れるので、キーボードでもたどり着けるようにし、
+ * 読み上げで何の表かが分かるように名前を付ける（UI-19、WCAG 2.1.1）
+ */
+export function TableWrap({ label, flush, children }: { label: string; flush?: boolean; children: ReactNode }) {
+  return (
+    <div className={flush ? 'table-wrap flush' : 'table-wrap'} role="region" aria-label={label} tabIndex={0}>
+      {children}
+    </div>
+  );
+}
