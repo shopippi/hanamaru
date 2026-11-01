@@ -25,6 +25,7 @@ import {
   useAction,
   useLoad,
   useToast,
+  TableWrap,
 } from '@hanamaru/ui';
 import { api, type AuditEntry, type LessonType, type Slot, type Teacher } from '../api.js';
 
@@ -603,7 +604,7 @@ export function Audit() {
               <Empty icon={<IconHistory />} message="操作記録はありません" />
             </div>
           ) : (
-            <div className="table-wrap">
+            <TableWrap label="操作記録">
               <table className="table">
                 <thead>
                   <tr>
@@ -628,7 +629,7 @@ export function Audit() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableWrap>
           )
         }
       </Loadable>

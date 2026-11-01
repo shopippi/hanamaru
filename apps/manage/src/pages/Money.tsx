@@ -28,6 +28,7 @@ import {
   useAction,
   useLoad,
   useToast,
+  TableWrap,
 } from '@hanamaru/ui';
 import { api, type Course, type Package, type StudentRow } from '../api.js';
 
@@ -75,7 +76,7 @@ export function Payments() {
                 <Empty icon={<IconYen />} message={unpaid ? '未払いの生徒はいません' : `${fmtMonth(month)}の請求はまだありません（毎月1日に作られます）`} />
               </div>
             ) : (
-              <div className="table-wrap">
+              <TableWrap label="入金状況">
                 <table className="table">
                   <caption className="table-caption">
                     {fmtMonth(month)}・{rows.length}件
@@ -132,7 +133,7 @@ export function Payments() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </TableWrap>
             )
           }
         </Loadable>
@@ -222,7 +223,7 @@ function ChargeItems({ chargeId, onChanged }: { chargeId: string; onChanged: () 
   return (
     <Loadable state={state} reload={reload} skeleton={<Skeleton lines={3} />}>
       {(d) => (
-        <div className="table-wrap">
+        <TableWrap label="請求の明細">
         <table className="table">
           <thead>
             <tr>
@@ -247,7 +248,7 @@ function ChargeItems({ chargeId, onChanged }: { chargeId: string; onChanged: () 
             ))}
           </tbody>
         </table>
-        </div>
+        </TableWrap>
       )}
     </Loadable>
   );

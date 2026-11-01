@@ -56,3 +56,17 @@ export async function adminNav(page: Page, name: string) {
   if (await menu.isVisible()) await menu.click();
   await page.getByRole('navigation', { name: '管理メニュー' }).getByRole('link', { name, exact: true }).click();
 }
+
+
+/** 色の切り替えやフェードなどの動きが終わるまで待つ（終わったあとに始まる動きも待つ）。くり返す動き（シマー）は除く */
+export async function settleAnimations(page: Page) {
+  await page.evaluate(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    for (let i = 0; i < 20; i++) {
+      await frame();
+      const running = document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getTiming().iterations !== Infinity);
+      if (running.length === 0) return;
+      await Promise.all(running.map((a) => a.finished.catch(() => {})));
+    }
+  });
+}

@@ -1,12 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { MANAGE, STAFF, STUDENT, login, loginAdmin } from './helpers.js';
+import { MANAGE, STAFF, STUDENT, login, loginAdmin, settleAnimations } from './helpers.js';
 
 // 画面の決まり（4.2、4.3）をブラウザで測って確かめる
 
 /** 表示中の要素を調べ、決まりに合わないものを返す */
 async function audit(page: Page) {
+  // 色の切り替え（選んだ枠・開くダイアログ）の動きの途中は色が混ざって測れないため、終わるのを待つ
+  await settleAnimations(page);
   return page.evaluate(() => {
     const problems: string[] = [];
     const parse = (c: string) => {
@@ -219,11 +221,18 @@ test.describe('UI-09 動きを減らす設定', () => {
       await new Promise((r) => setTimeout(r, 2000));
       await route.continue();
     });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(`${STUDENT}/`);
     const sk = page.locator('.skeleton').first();
     await expect(sk).toBeVisible({ timeout: 1500 });
-    const after = await sk.evaluate((e) => getComputedStyle(e, '::after'));
-    expect([after.animationName === 'none', after.display === 'none'].some(Boolean)).toBe(true);
+    expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
+    // 疑似要素の計算済みスタイルの返し方はブラウザで違うため、動いているアニメーションそのものも調べる
+    const state = await sk.evaluate((e) => {
+      const after = getComputedStyle(e, '::after');
+      const running = document.getAnimations().filter((a) => a instanceof CSSAnimation && a.animationName === 'shimmer').length;
+      return { stopped: after.animationName === 'none' || after.display === 'none', running };
+    });
+    expect(state).toEqual({ stopped: true, running: 0 });
   });
 });
 

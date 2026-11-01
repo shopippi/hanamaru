@@ -78,6 +78,39 @@ jobs:
           name: e2e-results
           path: e2e/test-results
 
+  e2e-webkit:
+    # iPhone の Safari と同じ描画エンジン（WebKit）で、主な操作・画面の決まり・アクセシビリティ・スマホの見た目を確かめる（MB-08 の自動化できる部分）
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_USER: hanamaru
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: hanamaru
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U hanamaru" --health-interval 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @hanamaru/e2e exec playwright install --with-deps webkit chromium
+      - run: pnpm e2e
+        env:
+          CI: 'true'
+          E2E_WEBKIT: '1'
+          DATABASE_URL: postgres://hanamaru:ci@127.0.0.1:5432/hanamaru
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: e2e-webkit-results
+          path: e2e/test-results
+
   images:
     # 本番・検証環境のイメージが作れること（infra/）
     runs-on: ubuntu-24.04
