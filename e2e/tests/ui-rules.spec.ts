@@ -7,6 +7,8 @@ import { MANAGE, STAFF, STUDENT, login, loginAdmin } from './helpers.js';
 
 /** 表示中の要素を調べ、決まりに合わないものを返す */
 async function audit(page: Page) {
+  // 色の切り替え（選んだ枠・開くダイアログ）の動きの途中は色が混ざって測れないため、終わるのを待つ
+  await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity).map((a) => a.finished.catch(() => {}))));
   return page.evaluate(() => {
     const problems: string[] = [];
     const parse = (c: string) => {
