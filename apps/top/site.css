@@ -1,0 +1,486 @@
+/* 公開トップページ（URL-01、4.4）と、特商法の表記・プライバシーポリシー・利用規約で共通の見た目。
+   予約の画面と同じく、白・黒・グレーだけ（UI-01）。外部の書体やスクリプトは読み込まない */
+
+:root {
+  --ink: #161616;
+  --text: #161616;
+  --secondary: #454545;
+  --muted: #5e5e5e; /* 白で 6.4:1、--sunken で 5.8:1 */
+  --line: #e3e3e3;
+  --line-strong: #c4c4c4;
+  --surface: #ffffff;
+  --sunken: #f4f4f4;
+  --radius: 10px;
+  --tap: 44px;
+  --font: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Meiryo', 'Noto Sans JP', 'Noto Sans CJK JP', sans-serif;
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-top: 72px;
+}
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.85;
+  letter-spacing: 0.02em;
+  -webkit-font-smoothing: antialiased;
+}
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.45;
+  font-feature-settings: 'palt' 1;
+  text-wrap: balance;
+}
+p {
+  margin: 0;
+}
+a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+img {
+  max-width: 100%;
+}
+
+.inner {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* 未記入の所（公開前に埋める） */
+mark.ph {
+  background: var(--sunken);
+  color: var(--secondary);
+  border: 1px dashed var(--line-strong);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+/* --- ボタン（予約の画面と同じ形） --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 0 18px;
+  border-radius: 6px;
+  border: 1px solid var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--ink);
+  color: #fff;
+}
+.btn-secondary {
+  background: var(--surface);
+  color: var(--ink);
+}
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink);
+}
+.btn-lg {
+  min-height: 52px;
+  padding: 0 28px;
+  font-size: 15px;
+}
+
+/* --- 上の帯 --- */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgb(255 255 255 / 94%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.site-header .inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 60px;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  margin-right: auto;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.header-nav {
+  display: flex;
+  gap: 4px;
+}
+
+/* --- 下の帯（特商法などへのリンクは、すべてのページから見える所に置く） --- */
+.site-footer {
+  margin-top: 72px;
+  border-top: 1px solid var(--line);
+  background: var(--sunken);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.site-footer .inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-block: 24px 32px;
+}
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.footer-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  font-size: 14px;
+}
+.copyright {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* --- トップページ --- */
+.hero {
+  padding-block: 56px 48px;
+  border-bottom: 1px solid var(--line);
+}
+.hero .inner {
+  display: grid;
+  gap: 20px;
+}
+.eyebrow {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+.hero h1 {
+  font-size: clamp(28px, 5vw, 44px);
+  letter-spacing: 0.04em;
+}
+.hero p.lead {
+  max-width: 34em;
+  color: var(--secondary);
+  font-size: 17px;
+}
+.hero .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.section {
+  padding-block: 56px 0;
+}
+.section > .inner {
+  display: grid;
+  gap: 20px;
+}
+.section h2 {
+  font-size: 24px;
+}
+.section-head {
+  display: grid;
+  gap: 6px;
+  max-width: 40em;
+}
+.section-head p {
+  color: var(--secondary);
+}
+
+.prose {
+  display: grid;
+  gap: 12px;
+  max-width: 40em;
+}
+
+/* 料金の表 */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+th,
+td {
+  text-align: left;
+  vertical-align: top;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+tbody tr:last-child th,
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+thead th {
+  background: var(--sunken);
+  font-size: 13px;
+  color: var(--secondary);
+  white-space: nowrap;
+}
+.section .table-wrap table {
+  min-width: 520px;
+}
+td.num,
+th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.note {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* 講師・写真のカード */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+.card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.card h3 {
+  font-size: 17px;
+}
+.card p {
+  color: var(--secondary);
+  font-size: 15px;
+}
+.photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  max-width: 100%;
+  border-radius: 8px;
+  background: var(--sunken);
+  border: 1px dashed var(--line-strong);
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+  padding: 12px;
+}
+
+/* 写真が届いたら、枠いっぱいに出す */
+.photo.has-img {
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: var(--sunken);
+}
+.photo.has-img img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.card .role {
+  font-size: 13px;
+  color: var(--muted);
+}
+.tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  vertical-align: middle;
+}
+
+/* 申し込みからレッスンまで（順番そのものが意味を持つので番号を付ける） */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.steps li {
+  counter-increment: step;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.steps li::before {
+  content: counter(step);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+.steps h3 {
+  font-size: 16px;
+}
+.steps p {
+  color: var(--secondary);
+  font-size: 15px;
+}
+
+/* 情報の一覧（お支払い・お問い合わせ） */
+.facts {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.facts > div {
+  display: grid;
+  grid-template-columns: 9em 1fr;
+  gap: 16px;
+  padding: 14px 16px;
+}
+.facts > div + div {
+  border-top: 1px solid var(--line);
+}
+.facts dt {
+  color: var(--muted);
+  font-size: 14px;
+}
+.facts dd {
+  margin: 0;
+  min-width: 0;
+}
+@media (max-width: 560px) {
+  .facts > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+.cta {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+  padding: 28px;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: #fff;
+}
+.cta h2 {
+  font-size: 22px;
+}
+.cta p {
+  color: #d9d9d9;
+}
+.cta .btn-primary {
+  background: #fff;
+  color: var(--ink);
+  border-color: #fff;
+}
+
+/* --- 特商法の表記・規約のページ --- */
+.doc {
+  display: grid;
+  gap: 16px;
+  max-width: 760px;
+  padding-block: 40px 0;
+}
+.doc h1 {
+  font-size: 26px;
+  margin-bottom: 8px;
+}
+.doc h2 {
+  font-size: 18px;
+  margin-top: 20px;
+}
+.doc ul,
+.doc ol {
+  margin: 0;
+  padding-left: 1.4em;
+  display: grid;
+  gap: 4px;
+}
+.doc table th[scope='row'] {
+  width: 11em;
+  background: var(--sunken);
+  font-size: 14px;
+  font-weight: 700;
+}
+@media (max-width: 560px) {
+  .doc table,
+  .doc tbody,
+  .doc tr,
+  .doc th[scope='row'],
+  .doc td {
+    display: block;
+    width: 100%;
+  }
+  .doc thead {
+    display: none;
+  }
+  .doc table th[scope='row'] {
+    border-bottom: 0;
+    padding-bottom: 4px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}

@@ -1,66 +1,147 @@
 <!doctype html>
 <html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#ffffff" />
-    <title>はなまる音楽教室</title>
-    <link rel="icon" href="/favicon.png" />
-    <style>
-      /* 公開トップページ（4.4）。当面は教室名とログインの2つのボタンだけ。後で作る HP に置き換える */
-      body {
-        margin: 0;
-        min-height: 100dvh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #fff;
-        color: #111;
-        font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic UI', 'Meiryo', sans-serif;
-      }
-      main {
-        width: 100%;
-        max-width: 400px;
-        padding: 24px 16px;
-        text-align: center;
-      }
-      img {
-        width: 96px;
-        height: 96px;
-      }
-      h1 {
-        font-size: 24px;
-        margin: 16px 0 32px;
-      }
-      a {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 52px;
-        margin-top: 12px;
-        border: 2px solid #111;
-        border-radius: 8px;
-        font-weight: 700;
-        text-decoration: none;
-        color: #111;
-      }
-      a.primary {
-        background: #111;
-        color: #fff;
-      }
-      a:focus-visible {
-        outline: 3px solid #111;
-        outline-offset: 2px;
-      }
-    </style>
-  </head>
-  <body>
-    <main>
-      <img src="/favicon.png" alt="" />
-      <h1>はなまる音楽教室</h1>
-      <!-- URL-01 -->
-      <a class="primary" href="https://student.hanamarumusic.com/">生徒ログイン</a>
-      <a href="https://staff.hanamarumusic.com/login">講師ログイン</a>
-    </main>
-  </body>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#ffffff">
+<title>はなまる音楽教室</title>
+<meta name="description" content="はなまる音楽教室のレッスン・料金・体験レッスンのご案内。">
+<link rel="icon" href="/favicon.png">
+<link rel="stylesheet" href="/site.css">
+</head>
+<body>
+<!-- 公開トップページ（URL-01）。【 】は公開前に松田さんが埋める所。上下の帯は build-legal.mjs と同じものを使う -->
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="/"><svg width="28" height="28" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path d="M24 4.5c2 0 3 2.6 4.8 3.2 1.9.6 4.2-.9 5.8.3 1.6 1.2.9 3.9 2 5.5 1.2 1.6 4 1.8 4.6 3.7.6 1.9-1.6 3.6-1.6 5.6s2.2 3.7 1.6 5.6c-.6 1.9-3.4 2.1-4.6 3.7-1.1 1.6-.4 4.3-2 5.5-1.6 1.2-3.9-.3-5.8.3-1.8.6-2.8 3.2-4.8 3.2s-3-2.6-4.8-3.2c-1.9-.6-4.2.9-5.8-.3-1.6-1.2-.9-3.9-2-5.5-1.2-1.6-4-1.8-4.6-3.7-.6-1.9 1.6-3.6 1.6-5.6s-2.2-3.7-1.6-5.6c.6-1.9 3.4-2.1 4.6-3.7 1.1-1.6.4-4.3 2-5.5 1.6-1.2 3.9.3 5.8-.3C21 7.1 22 4.5 24 4.5z" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linejoin="round"/><path d="M24 16.5a7.5 7.5 0 1 0 7.5 7.5c0-3.3-2.7-5-5-5s-4 1.6-4 3.8 1.5 3.2 3 3.2" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round"/></svg><span>はなまる音楽教室</span></a>
+    <nav class="header-nav" aria-label="ログイン">
+      <a class="btn btn-ghost" href="https://staff.hanamarumusic.com/login">講師</a>
+      <a class="btn btn-primary" href="https://student.hanamarumusic.com/">生徒ログイン</a>
+    </nav>
+  </div>
+</header>
+<main>
+<section class="hero" aria-labelledby="hero-title">
+  <div class="inner">
+    <p class="eyebrow">音楽教室</p>
+    <h1 id="hero-title">はなまる音楽教室</h1>
+    <p class="lead"><mark class="ph">【教室の紹介（2〜3文。どんな人に、どんなレッスンをするか）】</mark></p>
+    <div class="actions">
+      <a class="btn btn-primary btn-lg" href="https://student.hanamarumusic.com/trial">体験レッスンを申し込む</a>
+      <a class="btn btn-secondary btn-lg" href="#price">コースと料金を見る</a>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="lesson" aria-labelledby="lesson-title">
+  <div class="inner">
+    <div class="section-head">
+      <h2 id="lesson-title">レッスンについて</h2>
+      <p>講師と相談しながら、空いている日時を予約の画面から選んで受講します。毎週同じ曜日でなくてもかまいません。</p>
+    </div>
+    <div class="cards">
+      <div class="card"><div class="photo" role="img" aria-label="教室の写真（準備中）"><mark class="ph">【教室の写真】</mark></div><h3>教室</h3><p><mark class="ph">【教室の様子・設備（ピアノの台数など）】</mark></p></div>
+      <div class="card"><div class="photo" role="img" aria-label="レッスンの写真（準備中）"><mark class="ph">【レッスンの写真】</mark></div><h3>ポピュラーピアノコース</h3><p>J-POP・歌謡曲・ジャズ・洋楽をピアノで弾きたい方、弾き語りをしたい方へ。「コード奏法」で最短距離で曲を弾けるようになります。対面またはオンライン。</p></div>
+      <div class="card"><div class="photo" role="img" aria-label="レッスンの写真（準備中）"><mark class="ph">【レッスンの写真】</mark></div><h3>ドラムコース</h3><p>リズムの土台を作る、音楽でいちばん大事な楽器のひとつ。スティックで叩くだけで音が出るので、気軽に始められます。対面のみ。</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="price" aria-labelledby="price-title">
+  <div class="inner">
+    <div class="section-head">
+      <h2 id="price-title">コースと料金</h2>
+      <p>全コース、マンツーマンレッスンです（グループレッスンはご相談ください）。月謝は月の途中で始めても日割りはありません。<mark class="ph">【税込か確認】</mark></p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">コース</th><th scope="col">月の回数</th><th scope="col">1回の時間</th><th scope="col" class="num">月謝</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">月1回コース</th><td>1回</td><td>1時間</td><td class="num">6,000円</td></tr>
+          <tr><th scope="row">月2回コース</th><td>2回</td><td>1時間</td><td class="num">11,000円</td></tr>
+          <tr><th scope="row">月3回コース <span class="tag">おすすめ</span></th><td>3回</td><td>1時間</td><td class="num">15,000円</td></tr>
+          <tr><th scope="row">月4回コース</th><td>4回</td><td>1時間</td><td class="num">20,000円</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <dl class="facts">
+      <div><dt>月5回以上</dt><dd>月4回コースに、1回（1時間）ごとに5,000円を足した額です</dd></div>
+      <div><dt>入会金</dt><dd>いただきません。入会のときは、最初の月の月謝をお支払いいただきます</dd></div>
+      <div><dt>回数の有効期限</dt><dd>その月の回数は、翌月末まで使えます</dd></div>
+      <div><dt>そのほかの費用</dt><dd><mark class="ph">【教材費などの追加費用。なければ「なし」】</mark></dd></div>
+      <div><dt>体験レッスン</dt><dd><mark class="ph">【体験レッスンの料金・時間】</mark>。料金は当日、教室で現金でお支払いください</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="section" id="teachers" aria-labelledby="teachers-title">
+  <div class="inner">
+    <div class="section-head"><h2 id="teachers-title">講師</h2></div>
+    <div class="cards">
+      <div class="card"><div class="photo has-img"><img src="/images/matsuda-stage.jpg" alt="ドラムを演奏する松田 悠義" width="1568" height="1046" loading="lazy"></div><h3>松田 悠義</h3><p class="role">まつだ ひさよし／教室長・ポピュラーピアノコースとドラムコースを担当</p><p>市立伊丹高校吹奏楽部でジャズと出会い、ジャズピアノと音楽理論を学ぶ。シンガーのライブサポートを中心にピアニストとして全国で活動し、その後、佐藤英宜氏にジャズドラムを師事。淡路島 Ocean Terrace の Jazz Night にはドラムとピアノで約300回出演。独自の方法論によるレッスンは、幅広い年齢層から定評を得ている。</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="flow" aria-labelledby="flow-title">
+  <div class="inner">
+    <div class="section-head"><h2 id="flow-title">申し込みからレッスンまで</h2></div>
+    <ol class="steps">
+      <li><h3>体験レッスン</h3><p>下のボタンから申し込みます。ご希望の日時を伺い、教室からご連絡します。</p></li>
+      <li><h3>入会手続き</h3><p>教室からお送りするメールで、予約の画面のパスワードを決めます。コースを選び、契約の内容に同意して申し込みます。</p></li>
+      <li><h3>お支払い</h3><p>最初の月の月謝をお支払いいただきます。お支払いを確認すると、レッスンの回数が付きます。</p></li>
+      <li><h3>予約</h3><p>予約の画面で、講師の空いている日時を選んで予約します（ピアノは対面かオンラインを選べます）。前日にメールでお知らせします。</p></li>
+    </ol>
+  </div>
+</section>
+
+<section class="section" id="payment" aria-labelledby="payment-title">
+  <div class="inner">
+    <div class="section-head"><h2 id="payment-title">お支払い</h2></div>
+    <dl class="facts">
+      <div><dt>お支払い方法</dt><dd>クレジットカード（Apple Pay・Google Pay を含む）、現金（教室でお支払い）</dd></div>
+      <div><dt>お支払いの時期</dt><dd>入会時に最初の月の月謝。翌月からは毎月1日にその月の月謝。クレジットカードは毎月1日に自動で引き落とします</dd></div>
+      <div><dt>キャンセル</dt><dd>レッスンの前日20時までなら回数をお戻しします。それより後のキャンセルと無断欠席は、回数を使います。キャンセルした回は、翌月末までに振り替えられます</dd></div>
+      <div><dt>休会・退会</dt><dd>教室にご連絡ください。お申し出の翌月1日から止まります。お支払い済みの月の返金はありません</dd></div>
+    </dl>
+    <p class="note">くわしくは<a href="/terms">利用規約</a>と<a href="/tokushoho">特定商取引法に基づく表記</a>をご覧ください。</p>
+  </div>
+</section>
+
+<section class="section" id="access" aria-labelledby="access-title">
+  <div class="inner">
+    <div class="section-head"><h2 id="access-title">アクセスとお問い合わせ</h2></div>
+    <dl class="facts">
+      <div><dt>住所</dt><dd><mark class="ph">【住所（郵便番号から）】</mark> <mark class="ph">【地図のリンク】</mark></dd></div>
+      <div><dt>最寄り駅</dt><dd><mark class="ph">【最寄り駅と徒歩の分数】</mark></dd></div>
+      <div><dt>電話</dt><dd><mark class="ph">【電話番号】</mark></dd></div>
+      <div><dt>メール</dt><dd><mark class="ph">【メールアドレス】</mark></dd></div>
+      <div><dt>受付時間</dt><dd><mark class="ph">【受付時間（例: 平日10時〜18時）】</mark></dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="cta-title">
+  <div class="inner">
+    <div class="cta">
+      <h2 id="cta-title">まずは体験レッスンから</h2>
+      <p>楽器に触れるのが初めての方も、お気軽にお申し込みください。</p>
+      <a class="btn btn-primary btn-lg" href="https://student.hanamarumusic.com/trial">体験レッスンを申し込む</a>
+    </div>
+  </div>
+</section>
+</main>
+<footer class="site-footer">
+  <div class="inner">
+    <nav aria-label="教室について">
+      <ul class="footer-links">
+        <li><a href="/tokushoho">特定商取引法に基づく表記</a></li>
+        <li><a href="/privacy">プライバシーポリシー</a></li>
+        <li><a href="/terms">利用規約</a></li>
+      </ul>
+    </nav>
+    <p class="copyright">© はなまる音楽教室</p>
+  </div>
+</footer>
+</body>
 </html>
