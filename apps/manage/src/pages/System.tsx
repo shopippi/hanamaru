@@ -42,6 +42,7 @@ interface SystemStatus {
   notifications: {
     failedCount: number;
     gaveUpCount: number;
+    deliveryConfigured: boolean;
     state: State;
     failed: {
       id: string;
@@ -166,6 +167,13 @@ export function SystemPage() {
                   <StateBadge state={s.notifications.state} />
                 )
               } flush={s.notifications.failed.length > 0}>
+              {!s.notifications.deliveryConfigured && (
+                <div className="panel-body">
+                  <Warning title="メール送信が設定されていません">
+                    Resend の API キー（RESEND_API_KEY）がないため、メールは送らずに記録だけしています。開発用の環境ではこのままで問題ありません。
+                  </Warning>
+                </div>
+              )}
               {s.notifications.failed.length === 0 ? (
                 <Empty icon={<IconInbox />} message="届けられなかった通知はありません" />
               ) : (
