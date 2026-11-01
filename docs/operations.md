@@ -61,11 +61,11 @@
 5. 「領収書をメールで送る」を ON にする（MB-07）
 6. 検証環境はテストモードのキー（`sk_test_`）で、同じ手順を行う
 
-### 1.3 メール（未決: 8.2。候補は Resend）
+### 1.3 メール（Resend。8.2）
 
-**メール送信サービスは作成者の承認待ち。** 候補は Resend（送信）と Cloudflare Email Routing（受け取り）で、比較は `docs/mail-options.md`。Resend で送る仕組み（`apps/api/src/integrations/resend.ts`）は用意してあり、キーを入れたときだけ使う。キーがないあいだは、メールは送らずに記録だけし、本番・検証環境では「システムの状態」が「要確認」になる。
+送信は Resend、受け取りは Cloudflare Email Routing（作成者が承認。比較は `docs/mail-options.md`）。Resend で送る仕組み（`apps/api/src/integrations/resend.ts`）は用意してあり、キーを入れたときだけ使う。キーがないあいだは、メールは送らずに記録だけし、本番・検証環境では「システムの状態」が「要確認」になる。
 
-Resend を使うと決めたら:
+設定の手順:
 
 1. Resend に登録し、「Domains」で送信用のドメイン `send.hanamarumusic.com` を追加する
 2. 表示される DNS の値（SPF・DKIM・戻りメール用の MX）を Cloudflare の DNS に入れ、Resend で「Verified」になるのを待つ（OP-01）
