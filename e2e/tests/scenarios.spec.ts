@@ -443,7 +443,8 @@ test('PY-17 / PY-15 単発の請求の入金状況が分かり、入金履歴を
   await expect(a.getByText('入金済みにしました')).toBeVisible();
   await expect(a.getByText(/入金済み 1 \//)).toBeVisible();
 
-  const today = new Date().toISOString().slice(0, 10);
+  // 日付は日本時間で（UTC の日付だと、日本時間の0時〜9時に流したとき今日の入金が範囲から外れる）
+  const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
   const res = await a.request.get(`${MANAGE}/api/payments.csv?from=2020-01-01&to=${today}`);
   expect(res.headers()['content-type']).toContain('text/csv');
   const csv = await res.text();
@@ -478,7 +479,8 @@ test('DB-02 ダッシュボードの予約は講師別・教室別に切り替�
 });
 
 test('3.4 / PY-07 / PY-09 / PY-10 月が変わると請求が並び、猶予を過ぎた未払いは予約できず、現金で入金済みにすると戻る', async ({ browser }) => {
-  const now = new Date();
+  // 「来月」は日本時間で決める（UTC だと、日本時間の1日0時〜9時に流したとき今月を来月と取り違える）
+  const now = new Date(Date.now() + 9 * 3600_000);
   const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
   const ym = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}`;
   try {

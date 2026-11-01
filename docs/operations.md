@@ -82,14 +82,14 @@ Resend を使うと決めたら:
 2. `cp infra/env.example infra/.env` で `.env` を作り、値を埋める（`chmod 600`）
 3. ファイアウォールで受信ポートをすべて閉じる。管理用の SSH も Cloudflare Tunnel 経由にするか、接続元を絞る
 4. `bash infra/deploy.sh v0.1.0`
-5. 最初の管理者を作る。`psql` での作業は作成者が行う（7.3）。次を1回だけ実行する
+5. 最初の管理者を作る（作成者が行う。7.3）。メール送信を設定する前でも使える
 
    ```sh
-   docker compose -f infra/compose.yml --env-file infra/.env exec db psql -U hanamaru -d hanamaru -c \
-     "insert into accounts (email, role, display_name) values ('<松田さんのメール>', 'admin', '松田')"
+   docker compose -f infra/compose.yml --env-file infra/.env exec api \
+     node --import tsx scripts/create-admin.ts <松田さんのメール> 松田
    ```
 
-   その後、管理画面の「パスワードを忘れた方」から設定し、最初のログインで二段階認証を登録する
+   表示された招待リンクを開いてパスワードを決め、最初のログインで二段階認証を登録する。同じメールで何度実行しても管理者は1人のままで、リンクだけ新しくなる（リンクを使う前に期限が切れたときなど）
 
 ## 2. 公開と戻し方（7.2）
 
