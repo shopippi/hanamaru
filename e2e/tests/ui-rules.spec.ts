@@ -1,14 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { MANAGE, STAFF, STUDENT, login, loginAdmin } from './helpers.js';
+import { MANAGE, STAFF, STUDENT, login, loginAdmin, settleAnimations } from './helpers.js';
 
 // 画面の決まり（4.2、4.3）をブラウザで測って確かめる
 
 /** 表示中の要素を調べ、決まりに合わないものを返す */
 async function audit(page: Page) {
   // 色の切り替え（選んだ枠・開くダイアログ）の動きの途中は色が混ざって測れないため、終わるのを待つ
-  await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity).map((a) => a.finished.catch(() => {}))));
+  await settleAnimations(page);
   return page.evaluate(() => {
     const problems: string[] = [];
     const parse = (c: string) => {

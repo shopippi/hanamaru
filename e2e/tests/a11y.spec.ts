@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { MANAGE, STAFF, STUDENT, login, loginAdmin } from './helpers.js';
+import { MANAGE, STAFF, STUDENT, login, loginAdmin, settleAnimations } from './helpers.js';
 
 // アクセシビリティの自動検査（UI-05・UI-19、WCAG 2.1 AA）。
 // axe で主な画面を調べ、重い（serious）・とても重い（critical）違反があれば失敗にする。
@@ -15,7 +15,7 @@ async function violations(page: Page, name: string) {
   // 読み込み中の表示（スケルトン）が消えてから調べる
   await page.locator('[aria-busy="true"]').first().waitFor({ state: 'detached', timeout: 10_000 }).catch(() => {});
   // 開く動き（フェード・スライド）の途中だと色の重なりを正しく測れないため、動きが終わるのを待つ
-  await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity).map((a) => a.finished.catch(() => {}))));
+  await settleAnimations(page);
   const result = await new AxeBuilder({ page }).withTags(TAGS).disableRules(DISABLED_RULES).analyze();
   return result.violations
     .filter((v) => v.impact === 'serious' || v.impact === 'critical')
