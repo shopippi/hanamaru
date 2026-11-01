@@ -29,6 +29,7 @@
 | テスト | Vitest ＋ PGlite | PGlite はメモリ上で動く PostgreSQL。Docker なしで本物の SQL を使った受入テストを流せる |
 | 入力検証 | Zod | 設定値（3.8）と API の入力を同じ仕組みで検証する |
 | 決済 | Stripe 公式 SDK | 要件の指定（2章の7） |
+| メール送信 | Resend（HTTP API を直接呼ぶ。SDK は足さない） | 作成者が承認（2026年11月1日「好きな技術を使っていい」）。無料枠（月3,000通）で足り、独自ドメインで送れる。比較は `docs/mail-options.md` |
 | 画面 | React ＋ Vite | ホーム画面アプリ（4.5）の Service Worker と manifest は自前で書き、プラグインは足さない |
 
 パスワードのハッシュ（scrypt）、二段階認証のワンタイムパスワード（TOTP）は Node.js 標準の `crypto` で実装し、ライブラリを足さない。

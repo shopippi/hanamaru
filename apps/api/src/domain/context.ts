@@ -23,6 +23,8 @@ export interface SystemInfo {
   backupStatusFile?: string;
   /** 定期処理を数分おきに動かしている（本番・検証環境）。止まっていたら「要確認」にする */
   jobsScheduled?: boolean;
+  /** メールを実際に送る手段がある（Resend のキーがある）。本番・検証環境でなければ「要確認」にする */
+  mailConfigured?: boolean;
 }
 
 export interface Ctx {
