@@ -1,0 +1,3 @@
+# ログインして使う画面なので、検索エンジンには載せない（公開のページは hanamarumusic.com）
+User-agent: *
+Disallow: /

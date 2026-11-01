@@ -273,7 +273,16 @@ export function Home() {
 /** 担当の講師（TC-05）。押すとプロフィールが開き、講師のページからレビューを書ける */
 function HomeTeachers({ studentId }: { studentId: string }) {
   const { data } = useLoad(() => api.get<TeacherProfile[]>(`/students/${studentId}/teachers`), [studentId]);
-  if (!data || data.length === 0) return null;
+  // 読み込み中は同じ大きさの枠を出し、下の中身がずれないようにする（UI-07）
+  if (!data) {
+    return (
+      <section className="stack-sm" aria-hidden="true">
+        <p className="section-label">担当の講師</p>
+        <div className="skeleton" style={{ height: 88 }} />
+      </section>
+    );
+  }
+  if (data.length === 0) return null;
   return (
     <section className="stack-sm" aria-labelledby="home-teachers">
       <h2 className="section-label" id="home-teachers">
