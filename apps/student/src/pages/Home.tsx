@@ -272,11 +272,13 @@ export function Home() {
 
 /** 担当の講師（TC-05）。押すとプロフィールが開き、講師のページからレビューを書ける */
 function HomeTeachers({ studentId }: { studentId: string }) {
-  const { data } = useLoad(() => api.get<TeacherProfile[]>(`/students/${studentId}/teachers`), [studentId]);
-  // 読み込み中は同じ大きさの枠を出し、下の中身がずれないようにする（UI-07）
+  const { data, state } = useLoad(() => api.get<TeacherProfile[]>(`/students/${studentId}/teachers`), [studentId]);
+  // 読み込み中は同じ大きさの枠を出し、下の中身がずれないようにする（UI-07）。
+  // 0.3秒未満は透明にして場所だけ確保する（UI-10）。失敗したら枠ごと出さない
+  if (state.kind === 'error') return null;
   if (!data) {
     return (
-      <section className="stack-sm" aria-hidden="true">
+      <section className="stack-sm" aria-hidden="true" style={{ visibility: state.kind === 'idle' ? 'hidden' : 'visible' }}>
         <p className="section-label">担当の講師</p>
         <div className="skeleton" style={{ height: 88 }} />
       </section>

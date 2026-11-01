@@ -219,11 +219,18 @@ test.describe('UI-09 動きを減らす設定', () => {
       await new Promise((r) => setTimeout(r, 2000));
       await route.continue();
     });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(`${STUDENT}/`);
     const sk = page.locator('.skeleton').first();
     await expect(sk).toBeVisible({ timeout: 1500 });
-    const after = await sk.evaluate((e) => getComputedStyle(e, '::after'));
-    expect([after.animationName === 'none', after.display === 'none'].some(Boolean)).toBe(true);
+    expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
+    // 疑似要素の計算済みスタイルの返し方はブラウザで違うため、動いているアニメーションそのものも調べる
+    const state = await sk.evaluate((e) => {
+      const after = getComputedStyle(e, '::after');
+      const running = document.getAnimations().filter((a) => a instanceof CSSAnimation && a.animationName === 'shimmer').length;
+      return { stopped: after.animationName === 'none' || after.display === 'none', running };
+    });
+    expect(state).toEqual({ stopped: true, running: 0 });
   });
 });
 

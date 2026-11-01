@@ -1792,6 +1792,7 @@ legend {
 .dialog {
   border: 0;
   padding: 0;
+  background: var(--surface);
   border-radius: var(--radius-lg);
   width: min(480px, calc(100% - 32px));
   max-height: calc(100dvh - 32px);
@@ -2218,6 +2219,13 @@ a.list-row,
 .accordion-inner {
   min-height: 0;
   overflow: hidden;
+  /* 閉じたら中身を見えなくする（読み上げ・検索の対象からも外す）。閉じる動きが終わってから消す */
+  visibility: hidden;
+  transition: visibility 0s linear 420ms;
+}
+.accordion[data-open] .accordion-inner {
+  visibility: visible;
+  transition-delay: 0s;
 }
 .accordion-inner > .panel-body {
   border-top: 1px solid var(--border);
