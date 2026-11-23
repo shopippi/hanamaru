@@ -28,7 +28,7 @@ HEALTHCHECK --interval=30s --timeout=5s CMD node -e "fetch('http://127.0.0.1:300
 CMD ["node", "--import", "tsx", "src/main.ts"]
 
 # --- 画面と振り分け（Caddy） ---------------------------------------------------
-FROM caddy:2.10-alpine AS web
+FROM caddy:2.11-alpine AS web
 COPY infra/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /repo/apps/student/dist /srv/student
 COPY --from=build /repo/apps/staff/dist /srv/staff
